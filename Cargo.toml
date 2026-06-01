@@ -1,0 +1,25 @@
+[package]
+name = "voxtype"
+version = "0.1.0"
+edition = "2021"
+description = "Voice-to-text dictation for X11/XFCE - press a key, speak, text appears"
+
+[[bin]]
+name = "voxtype"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["multipart", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+anyhow = "1"
+dirs = "5"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
