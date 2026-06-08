@@ -450,14 +450,25 @@ fn inject_text_wayland(text: &str) -> Result<()> {
     }
 
     write_log(&format!("Pasting {} chars via wtype (Wayland)", text.len()));
-    let status = Command::new("wtype")
-        .args(["-M", "ctrl", "-k", "v", "-m", "ctrl"])
-        .output()
-        .context("wtype execution failed")?;
 
-    if !status.status.success() {
-        let stderr = String::from_utf8_lossy(&status.stderr);
-        write_log(&format!("wtype paste failed (clipboard still set): {}", stderr.trim()));
+    // Terminal paste (Ctrl+Shift+V), then GUI app paste (Ctrl+V)
+    let paste_keys: &[&[&str]] = &[
+        &["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "ctrl", "-m", "shift"],
+        &["-M", "ctrl", "-k", "v", "-m", "ctrl"],
+    ];
+
+    for keys in paste_keys {
+        let status = Command::new("wtype")
+            .args(*keys)
+            .output()
+            .context("wtype execution failed")?;
+        if status.status.success() {
+            std::thread::sleep(Duration::from_millis(50));
+            break;  // first successful paste is enough
+        } else {
+            let stderr = String::from_utf8_lossy(&status.stderr);
+            write_log(&format!("wtype paste failed (clipboard still set): {}", stderr.trim()));
+        }
     }
 
     Ok(())
