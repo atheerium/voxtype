@@ -1,6 +1,6 @@
 # voxtype
 
-Voice-to-text dictation for X11/XFCE (Linux Mint). Press a hotkey, speak, text appears.
+Voice-to-text dictation for Linux (X11/XFCE, Wayland). Press a hotkey, speak, text appears.
 
 ## Architecture
 
@@ -12,14 +12,20 @@ Ctrl+Space → voxtype → SIGUSR1 → Daemon (background)
 
 - **Daemon**: Starts silently at login. No recording on boot.
 - **Toggle**: Ctrl+Space sends SIGUSR1 — press to record, press again to paste.
-- **Smart paste**: Detects terminal vs GUI window, uses correct paste shortcut.
-- **Dual clipboard**: xsel + xclip fallback chain for reliable clipboard setting.
+- **Smart paste**: Detects terminal vs GUI window on X11; uses Ctrl+V on Wayland.
+- **Clipboard**: xsel + xclip (X11) or wl-copy (Wayland).
 - **Logging**: All errors written to `~/.local/share/voxtype/daemon.log`.
 
 ## Dependencies
 
+X11:
 ```bash
 sudo apt install ffmpeg xdotool xsel xclip
+```
+
+Wayland:
+```bash
+sudo apt install ffmpeg wl-clipboard wtype
 ```
 
 ## Build
@@ -40,6 +46,7 @@ Or create `~/.config/voxtype/config.toml`:
 ```toml
 groq_api_key = "gsk_your_key_here"
 language = "en"                    # ISO-639-1, optional
+backend = "auto"                   # "auto" (detect), "x11", or "wayland"
 ```
 
 ## XFCE Hotkey

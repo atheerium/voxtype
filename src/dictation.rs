@@ -10,6 +10,33 @@ use tokio::signal::unix::{signal, SignalKind};
 
 use crate::config::Config;
 
+// ── Environment detection ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DesktopEnv {
+    X11,
+    Wayland,
+}
+
+pub fn detect_env() -> DesktopEnv {
+    if std::env::var("WAYLAND_DISPLAY").is_ok()
+        || std::env::var("XDG_SESSION_TYPE")
+            .map(|v| v == "wayland")
+            .unwrap_or(false)
+    {
+        DesktopEnv::Wayland
+    } else {
+        DesktopEnv::X11
+    }
+}
+
+pub fn deps_install_hint(env: DesktopEnv) -> &'static str {
+    match env {
+        DesktopEnv::X11 => "sudo apt install ffmpeg xdotool xsel xclip",
+        DesktopEnv::Wayland => "sudo apt install ffmpeg wl-clipboard wtype",
+    }
+}
+
 // ── File paths ────────────────────────────────────────────────────
 
 const PIDFILE: &str = "/tmp/voxtype.pid";
@@ -84,9 +111,24 @@ fn require_tool(name: &str) -> bool {
 
 fn validate_deps() -> Vec<String> {
     let mut missing = Vec::new();
-    for tool in &["ffmpeg", "xdotool", "xsel", "xclip"] {
-        if !require_tool(tool) {
-            missing.push(tool.to_string());
+    if !require_tool("ffmpeg") {
+        missing.push("ffmpeg".to_string());
+    }
+    let env = detect_env();
+    match env {
+        DesktopEnv::X11 => {
+            for tool in &["xdotool", "xsel", "xclip"] {
+                if !require_tool(tool) {
+                    missing.push(tool.to_string());
+                }
+            }
+        }
+        DesktopEnv::Wayland => {
+            for tool in &["wl-copy", "wtype"] {
+                if !require_tool(tool) {
+                    missing.push(tool.to_string());
+                }
+            }
         }
     }
     missing
@@ -100,21 +142,33 @@ pub async fn run_daemon() -> Result<()> {
         .context("Failed to write PID file")?;
 
     // Validate system dependencies
+    let env = detect_env();
     let missing = validate_deps();
     if !missing.is_empty() {
         let msg = format!(
-            "Missing runtime dependencies: {}. Install with: sudo apt install ffmpeg xdotool xsel xclip",
-            missing.join(", ")
+            "Missing runtime dependencies: {}. Install with: {}",
+            missing.join(", "),
+            deps_install_hint(env)
         );
         write_log(&msg);
         eprintln!("{}", msg);
     }
 
-    write_log(&format!(
-        "Daemon started. DISPLAY={:?}, XAUTHORITY={:?}",
-        std::env::var("DISPLAY").unwrap_or_default(),
-        std::env::var("XAUTHORITY").unwrap_or_default()
-    ));
+    match detect_env() {
+        DesktopEnv::X11 => {
+            write_log(&format!(
+                "Daemon started (X11). DISPLAY={:?}, XAUTHORITY={:?}",
+                std::env::var("DISPLAY").unwrap_or_default(),
+                std::env::var("XAUTHORITY").unwrap_or_default()
+            ));
+        }
+        DesktopEnv::Wayland => {
+            write_log(&format!(
+                "Daemon started (Wayland). WAYLAND_DISPLAY={:?}",
+                std::env::var("WAYLAND_DISPLAY").unwrap_or_default()
+            ));
+        }
+    }
 
     // Signal handlers
     let mut usr1 = signal(SignalKind::user_defined1())
@@ -317,9 +371,22 @@ async fn transcribe(api_key: &str, config: &Config) -> Result<String> {
     anyhow::bail!("Empty response from API");
 }
 
-// ── X11 Text Injection ────────────────────────────────────────────
+// ── Text Injection ────────────────────────────────────────────
 
 fn inject_text(text: &str) -> Result<()> {
+    let config = Config::load()?;
+    let env = match config.backend.as_deref() {
+        Some("x11") => DesktopEnv::X11,
+        Some("wayland") => DesktopEnv::Wayland,
+        _ => detect_env(),
+    };
+    match env {
+        DesktopEnv::X11 => inject_text_x11(text),
+        DesktopEnv::Wayland => inject_text_wayland(text),
+    }
+}
+
+fn inject_text_x11(text: &str) -> Result<()> {
     // 1. Set clipboard via xsel
     set_clipboard_xsel(text)?;
 
@@ -333,7 +400,7 @@ fn inject_text(text: &str) -> Result<()> {
     let is_term = is_terminal_window();
 
     write_log(&format!(
-        "Injecting {} chars into {} window",
+        "Injecting {} chars into {} window (X11)",
         text.len(),
         if is_term { "terminal" } else { "GUI" }
     ));
@@ -351,6 +418,63 @@ fn inject_text(text: &str) -> Result<()> {
             .args(["key", "ctrl+v"])
             .output()
             .context("xdotool key ctrl+v failed")?;
+    }
+
+    Ok(())
+}
+
+fn inject_text_wayland(text: &str) -> Result<()> {
+    // 1. Set clipboard via wl-copy
+    set_clipboard_wl_copy(text)?;
+
+    // 2. Wait for clipboard propagation
+    std::thread::sleep(Duration::from_millis(100));
+
+    write_log(&format!(
+        "Injecting {} chars via wtype (Wayland)",
+        text.len()
+    ));
+
+    // 3. Send Ctrl+V via wtype (works in most Wayland terminals and GUI apps)
+    send_paste_wtype()?;
+
+    Ok(())
+}
+
+fn set_clipboard_wl_copy(text: &str) -> Result<()> {
+    let mut child = Command::new("wl-copy")
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "wl-copy not found: {}. Install: sudo apt install wl-clipboard",
+                e
+            )
+        })?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(text.as_bytes())
+            .context("Failed to write to wl-copy stdin")?;
+    }
+
+    child.wait().context("wl-copy failed")?;
+    Ok(())
+}
+
+fn send_paste_wtype() -> Result<()> {
+    let status = Command::new("wtype")
+        .args(["-M", "ctrl", "-k", "v", "-m", "ctrl"])
+        .output()
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "wtype not found: {}. Install: sudo apt install wtype",
+                e
+            )
+        })?;
+
+    if !status.status.success() {
+        let stderr = String::from_utf8_lossy(&status.stderr);
+        anyhow::bail!("wtype paste failed: {}", stderr.trim());
     }
 
     Ok(())
