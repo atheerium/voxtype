@@ -207,21 +207,35 @@ fn cleanup() {
     let _ = fs::remove_file(AUDIO_FILE);
 }
 
+fn notify(summary: &str, body: &str) {
+    Command::new("notify-send")
+        .args(["-a", "voxtype", summary, body])
+        .output()
+        .ok();
+}
+
 // ── Toggle ────────────────────────────────────────────────────────
 
 async fn toggle() {
     if is_recording() {
+        notify("voxtype", "Transcribing...");
         match stop_and_transcribe().await {
-            Ok(text) => write_log(&format!("Transcribed and injected: {} chars", text.len())),
+            Ok(text) => {
+                write_log(&format!("Transcribed and injected: {} chars", text.len()));
+                notify("voxtype", &format!("Pasted {} chars ✓", text.len()));
+            }
             Err(e) => {
                 let msg = format!("Transcription/paste failed: {}", e);
                 write_log(&msg);
-                eprintln!("{}", msg);
+                notify("voxtype", &format!("Failed: {}", e));
             }
         }
     } else {
         match start_recording() {
-            Ok(()) => write_log("Recording started"),
+            Ok(()) => {
+                write_log("Recording started");
+                notify("voxtype", "Recording...");
+            }
             Err(e) => {
                 let msg = format!("Recording failed: {}", e);
                 write_log(&msg);
