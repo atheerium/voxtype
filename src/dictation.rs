@@ -424,19 +424,27 @@ fn inject_text_x11(text: &str) -> Result<()> {
 }
 
 fn inject_text_wayland(text: &str) -> Result<()> {
-    // 1. Set clipboard via wl-copy
     set_clipboard_wl_copy(text)?;
-
-    // 2. Wait for clipboard propagation
     std::thread::sleep(Duration::from_millis(100));
 
-    write_log(&format!(
-        "Injecting {} chars via wtype (Wayland)",
-        text.len()
-    ));
+    if !require_tool("wtype") {
+        write_log(&format!(
+            "Copied {} chars to clipboard (manual paste). Install wtype: sudo apt install wtype",
+            text.len()
+        ));
+        return Ok(());
+    }
 
-    // 3. Send Ctrl+V via wtype (works in most Wayland terminals and GUI apps)
-    send_paste_wtype()?;
+    write_log(&format!("Pasting {} chars via wtype (Wayland)", text.len()));
+    let status = Command::new("wtype")
+        .args(["-M", "ctrl", "-k", "v", "-m", "ctrl"])
+        .output()
+        .context("wtype execution failed")?;
+
+    if !status.status.success() {
+        let stderr = String::from_utf8_lossy(&status.stderr);
+        write_log(&format!("wtype paste failed (clipboard still set): {}", stderr.trim()));
+    }
 
     Ok(())
 }
@@ -458,25 +466,6 @@ fn set_clipboard_wl_copy(text: &str) -> Result<()> {
     }
 
     child.wait().context("wl-copy failed")?;
-    Ok(())
-}
-
-fn send_paste_wtype() -> Result<()> {
-    let status = Command::new("wtype")
-        .args(["-M", "ctrl", "-k", "v", "-m", "ctrl"])
-        .output()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "wtype not found: {}. Install: sudo apt install wtype",
-                e
-            )
-        })?;
-
-    if !status.status.success() {
-        let stderr = String::from_utf8_lossy(&status.stderr);
-        anyhow::bail!("wtype paste failed: {}", stderr.trim());
-    }
-
     Ok(())
 }
 
