@@ -9,6 +9,8 @@ pub struct Config {
     pub language: Option<String>,
     /// Force backend: "auto" (detect), "x11", or "wayland"
     pub backend: Option<String>,
+    /// PulseAudio source name or device (e.g. "default", "alsa_input.usb-...")
+    pub audio_source: Option<String>,
 }
 
 impl Config {
@@ -23,7 +25,7 @@ impl Config {
             return Ok(config);
         }
 
-        Ok(Config { groq_api_key: None, model: None, language: None, backend: None })
+        Ok(Config { groq_api_key: None, model: None, language: None, backend: None, audio_source: None })
     }
 
     pub fn groq_api_key(&self) -> Result<String> {
