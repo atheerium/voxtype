@@ -2,7 +2,7 @@
 #
 # voxtype installer — one-command setup for voice-to-text dictation on Linux.
 #
-#   curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh | bash
+#   curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
 #
 # What it does:
 #   1. Detects your display server (X11 / Wayland) and compositor
@@ -88,7 +88,7 @@ usage() {
   cat <<'HELP'
 voxtype installer — one-command setup for voice-to-text dictation on Linux.
 
-  curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh | bash
+  curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
 
 Options:
   -h, --help           Show this help

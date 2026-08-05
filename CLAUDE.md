@@ -27,7 +27,7 @@ The binary is output to `target/release/voxtype`.
 
 - **README.md** is the marketing/SEO surface: one-command install at the top,
   Wispr Flow comparison, FAQ. Keep install commands in sync with `install.sh`.
-- **install.sh** is the one-command installer (`curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh | bash`).
+- **install.sh** is the one-command installer (`curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash`).
   - Detects display server/compositor/distro, installs deps, downloads a
     prebuilt binary from GitHub Releases (assets named `voxtype-<triple>.tar.gz`
     with `sha256sums.txt`), falls back to `cargo install --git`.
