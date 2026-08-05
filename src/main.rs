@@ -48,6 +48,12 @@ async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {
+        // Print version and exit
+        Some("--version") | Some("-V") => {
+            println!("voxtype {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+
         // Internal: run as persistent daemon
         Some("__daemon") => return dictation::run_daemon().await,
 
