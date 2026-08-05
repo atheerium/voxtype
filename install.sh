@@ -385,6 +385,7 @@ append_line_if_missing() { # $1 = file, $2 = line
       info "Would create $1 and add: $2"
       return 0
     fi
+    mkdir -p "$(dirname "$1")"
     touch "$1"
   fi
   if ! grep -qF -- "$2" "$1" 2>/dev/null; then
