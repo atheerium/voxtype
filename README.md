@@ -2,8 +2,9 @@
   <img src="docs/voxtype-banner.svg" width="100%" alt="voxtype — free, open-source voice-to-text dictation for Linux. Press Ctrl+Space, speak, done.">
 </p>
 
+# voxtype — Free, Open-Source Voice-to-Text Dictation for Linux
+
 <p align="center">
-  <strong>Free, open-source voice-to-text dictation for Linux.</strong><br>
   The <strong>Wispr Flow alternative</strong> that is free, private, and Linux-first.<br>
   Press <kbd>Ctrl</kbd>+<kbd>Space</kbd>, speak, and your words are typed into any app.
 </p>
