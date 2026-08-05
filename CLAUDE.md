@@ -37,6 +37,10 @@ The binary is output to `target/release/voxtype`.
 - **Release flow**: pushing a `v*` tag runs `.github/workflows/release.yml`,
   which builds `x86_64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, and
   `aarch64-unknown-linux-musl` and publishes a GitHub Release.
+  - **Bump `version` in `Cargo.toml` FIRST** (it feeds `voxtype --version`),
+    commit, then tag `v<same-version>`.
+  - The workflow ships `install.sh` as a release asset so the README one-liner
+    (`releases/latest/download/install.sh`) is served by the fast object CDN.
 - **CI** (`.github/workflows/ci.yml`): fmt, clippy `-D warnings`, tests, release build, installer lint.
 
 ## Architecture

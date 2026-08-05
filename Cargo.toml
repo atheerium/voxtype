@@ -1,6 +1,6 @@
 [package]
 name = "voxtype"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Free, open-source voice-to-text dictation for Linux. Press Ctrl+Space, speak, and your words are typed into any app. A privacy-friendly, self-hostable alternative to Wispr Flow."
 license = "MIT"
