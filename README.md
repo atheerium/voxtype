@@ -17,6 +17,7 @@
   <img src="https://img.shields.io/badge/platform-Linux%20(X11%20%2B%20Wayland)-blueviolet.svg" alt="Linux X11 and Wayland">
   <img src="https://img.shields.io/badge/dictation-Whisper%20via%20Groq-cyan.svg" alt="Whisper via Groq">
   <a href="https://github.com/atheerium/voxtype/stargazers"><img src="https://img.shields.io/github/stars/atheerium/voxtype?style=social" alt="GitHub stars"></a>
+  <a href="https://ko-fi.com/atheerium"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-%F0%9F%8E%81%20ko--fi.com/atheerium-ff5e5b.svg" alt="Support on Ko-fi"></a>
 </p>
 
 ---
@@ -320,6 +321,17 @@ for short recordings; the whole loop is usually well under 5 seconds.
 - System tray indicator
 - Packaged releases (deb, rpm, AUR)
 
+## Support & Donations
+
+voxtype is free and always will be, made by [Atheerium](https://atheerium.com).
+If it saves you time, consider supporting the work:
+
+- ☕ [Buy me a coffee on Ko-fi](https://ko-fi.com/atheerium)
+- ⭐ Star the repo — it helps others discover free dictation
+- 🐛 Report bugs and open PRs
+
+Every donation and star keeps open-source dictation alive and growing.
+
 ## Contributing
 
 Contributions are welcome — code, docs, packaging, translations. See
@@ -329,13 +341,14 @@ Contributions are welcome — code, docs, packaging, translations. See
 
 ## License
 
-[MIT](LICENSE) © Atheer
+[MIT](LICENSE) © [Atheerium](https://atheerium.com)
 
 ---
 
 <p align="center">
-  <sub>Made with 💚 for Linux users who'd rather speak than type.</sub><br>
-  <sub>Found this useful? <a href="https://github.com/atheerium/voxtype">⭐ Star voxtype on GitHub</a> — it helps more people discover free dictation.</sub>
+  Made with 💚 by <a href="https://atheerium.com">Atheerium</a> for Linux users who'd rather speak than type.<br>
+  <a href="https://ko-fi.com/atheerium">☕ Support voxtype on Ko-fi</a> · <a href="https://atheerium.com">atheerium.com</a><br>
+  Found this useful? <a href="https://github.com/atheerium/voxtype">⭐ Star voxtype on GitHub</a> — it helps more people discover free dictation.
 </p>
 
 ---

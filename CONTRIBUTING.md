@@ -1,6 +1,7 @@
 # Contributing to voxtype
 
 Thanks for helping make free, open-source dictation better for Linux users!
+voxtype is made by [Atheerium](https://atheerium.com) ([Ko-fi](https://ko-fi.com/atheerium)).
 All types of contributions are welcome: code, docs, packaging, translations,
 bug reports, and feature ideas.
 

@@ -8,7 +8,8 @@ report them privately via GitHub's Security Advisories:
 <https://github.com/atheerium/voxtype/security/advisories/new>
 
 You can also email the maintainers directly (see the repository's
-`AUTHORS`/commit history for contact details).
+`AUTHORS`/commit history for contact details) — voxtype is maintained by
+[Atheerium](https://atheerium.com).
 
 We aim to acknowledge reports within **48 hours** and to ship a fix as soon as
 practically possible. Please include:

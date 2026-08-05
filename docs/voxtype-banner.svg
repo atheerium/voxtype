@@ -54,4 +54,6 @@
     <text x="462" y="333">curl -fsSL github.com/atheerium/voxtype/</text>
     <text x="462" y="352">  releases/latest/download/install.sh | bash</text>
   </g>
+
+  <text x="442" y="390" font-family="system-ui, sans-serif" font-size="15" fill="#64748b">by Atheerium · atheerium.com · ko-fi.com/atheerium</text>
 </svg>

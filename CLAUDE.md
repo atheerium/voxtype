@@ -10,6 +10,9 @@ marketed as the "Wispr Flow alternative." Press a hotkey, speak, and the transcr
 Supports X11 (XFCE, GNOME X11, i3) and Wayland (Sway, Hyprland, KDE, GNOME) via auto-detection.
 
 Published at https://github.com/atheerium/voxtype (public, `main` branch).
+Brand: made by **Atheerium** — website https://atheerium.com, donations
+https://ko-fi.com/atheerium. Keep the Atheerium credit in README, LICENSE,
+install.sh, and package metadata.
 
 ## Build Commands
 

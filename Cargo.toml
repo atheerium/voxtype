@@ -5,7 +5,8 @@ edition = "2021"
 description = "Free, open-source voice-to-text dictation for Linux. Press Ctrl+Space, speak, and your words are typed into any app. A privacy-friendly, self-hostable alternative to Wispr Flow."
 license = "MIT"
 repository = "https://github.com/atheerium/voxtype"
-homepage = "https://github.com/atheerium/voxtype"
+homepage = "https://atheerium.com"
+authors = ["Atheerium"]
 readme = "README.md"
 keywords = [
     "voice-to-text",

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 # voxtype installer — one-command setup for voice-to-text dictation on Linux.
+# Made by Atheerium (https://atheerium.com · https://ko-fi.com/atheerium)
 #
 #   curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
 #
