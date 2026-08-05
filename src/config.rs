@@ -103,3 +103,109 @@ fn parse_env_assignment(line: &str, var: &str) -> Option<String> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_env_assignment() {
+        assert_eq!(
+            parse_env_assignment("GROQ_API_KEY=gsk_abc", "GROQ_API_KEY"),
+            Some("gsk_abc".to_string())
+        );
+        assert_eq!(
+            parse_env_assignment("export GROQ_API_KEY=\"gsk_abc\"", "GROQ_API_KEY"),
+            Some("gsk_abc".to_string())
+        );
+        assert_eq!(
+            parse_env_assignment("export GROQ_API_KEY='gsk_abc'", "GROQ_API_KEY"),
+            Some("gsk_abc".to_string())
+        );
+        assert_eq!(
+            parse_env_assignment("export GROQ_API_KEY=gsk_abc # comment", "GROQ_API_KEY"),
+            Some("gsk_abc".to_string())
+        );
+        assert_eq!(
+            parse_env_assignment("export OTHER=1 GROQ_API_KEY=gsk_abc", "GROQ_API_KEY"),
+            Some("gsk_abc".to_string())
+        );
+        assert_eq!(parse_env_assignment("export PATH=/usr/bin", "GROQ_API_KEY"), None);
+        assert_eq!(parse_env_assignment("GROQ_API_KEY=", "GROQ_API_KEY"), None);
+        assert_eq!(parse_env_assignment("", "GROQ_API_KEY"), None);
+    }
+
+    #[test]
+    fn parses_toml_config() {
+        let cfg: Config = toml::from_str(
+            r#"
+            groq_api_key = "gsk_abc"
+            backend = "wayland"
+            language = "en"
+            model = "whisper-tiny"
+            audio_source = "alsa_input.usb-mic"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.groq_api_key.as_deref(), Some("gsk_abc"));
+        assert_eq!(cfg.model(), "whisper-tiny");
+        assert_eq!(cfg.language(), Some("en"));
+        assert_eq!(cfg.backend.as_deref(), Some("wayland"));
+        assert_eq!(cfg.audio_source.as_deref(), Some("alsa_input.usb-mic"));
+    }
+
+    #[test]
+    fn defaults_when_absent() {
+        let cfg = Config {
+            groq_api_key: None,
+            model: None,
+            language: None,
+            backend: None,
+            audio_source: None,
+        };
+        assert_eq!(cfg.model(), "whisper-large-v3-turbo");
+        assert_eq!(cfg.language(), None);
+    }
+
+    #[test]
+    fn api_key_resolution_order() {
+        // Config file value wins over the environment variable.
+        let cfg = Config {
+            groq_api_key: Some("gsk_from_file".to_string()),
+            model: None,
+            language: None,
+            backend: None,
+            audio_source: None,
+        };
+        std::env::set_var("GROQ_API_KEY", "gsk_from_env");
+        assert_eq!(cfg.groq_api_key().unwrap(), "gsk_from_file");
+
+        // Environment is the fallback when the config omits the key.
+        let cfg = Config {
+            groq_api_key: None,
+            model: None,
+            language: None,
+            backend: None,
+            audio_source: None,
+        };
+        assert_eq!(cfg.groq_api_key().unwrap(), "gsk_from_env");
+
+        // With no config key and no env var, resolution fails unless the
+        // user's shell rc files leak a real key in. Point HOME at an empty
+        // dir so this test is deterministic on any machine.
+        let empty_home = std::env::temp_dir().join(format!(
+            "voxtype-test-home-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::create_dir_all(&empty_home);
+        let original_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &empty_home);
+        std::env::remove_var("GROQ_API_KEY");
+        assert!(cfg.groq_api_key().is_err());
+        match original_home {
+            Some(home) => std::env::set_var("HOME", home),
+            None => std::env::remove_var("HOME"),
+        }
+        let _ = std::fs::remove_dir_all(&empty_home);
+    }
+}

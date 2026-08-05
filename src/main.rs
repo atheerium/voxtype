@@ -2,28 +2,9 @@ mod config;
 mod dictation;
 
 use anyhow::Result;
-use std::fs;
 use std::process::Command;
 
-const PIDFILE: &str = "/tmp/voxtype.pid";
-
-fn daemon_running() -> bool {
-    if let Ok(content) = fs::read_to_string(PIDFILE) {
-        if let Ok(pid) = content.trim().parse::<u32>() {
-            return Command::new("kill")
-                .arg("-0")
-                .arg(pid.to_string())
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
-        }
-    }
-    false
-}
-
-fn daemon_pid() -> Option<u32> {
-    fs::read_to_string(PIDFILE).ok().and_then(|c| c.trim().parse::<u32>().ok())
-}
+use dictation::{daemon_pid, daemon_running};
 
 fn spawn_daemon() -> Result<()> {
     Command::new(std::env::current_exe()?)
@@ -44,8 +25,10 @@ fn spawn_daemon() -> Result<()> {
 }
 
 fn send_signal(signal: &str, pid: u32) -> Result<()> {
+    let flag = format!("-{}", signal);
+    let pid_str = pid.to_string();
     Command::new("kill")
-        .args([format!("-{}", signal).as_str(), &pid.to_string()])
+        .args([flag.as_str(), pid_str.as_str()])
         .output()
         .map_err(|e| anyhow::anyhow!("Failed to send {} to daemon: {}", signal, e))?;
     Ok(())
