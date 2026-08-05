@@ -347,25 +347,27 @@ pub async fn run_daemon() -> Result<()> {
         return Ok(());
     }
 
-    // Write PID file
-    fs::write(PIDFILE, std::process::id().to_string())
-        .context("Failed to write PID file")?;
-
-    // A previous daemon may have died mid-recording (crash or SIGKILL),
-    // leaving an orphaned ffmpeg and a stale lockfile behind. Clean these
-    // up so a fresh recording can't conflict with leftover state.
-    cleanup_stale_state();
-
-    // Register signal handlers BEFORE any slow startup work (env checks,
-    // dependency validation, logging). A toggle (SIGUSR1) arriving before
-    // the handler is installed would terminate the daemon, because
-    // SIGUSR1's default action is to kill the process.
+    // Register signal handlers BEFORE the PID file exists. The CLI only
+    // sends SIGUSR1 after it observes the PID file, so writing it before
+    // the handlers were installed would let a toggle arrive while SIGUSR1
+    // still had its default disposition, which kills the process.
     let mut usr1 = signal(SignalKind::user_defined1())
         .context("Failed to setup SIGUSR1 handler")?;
     let mut term = signal(SignalKind::terminate())
         .context("Failed to setup SIGTERM handler")?;
     let mut int = signal(SignalKind::interrupt())
         .context("Failed to setup SIGINT handler")?;
+
+    // A previous daemon may have died mid-recording (crash or SIGKILL),
+    // leaving an orphaned ffmpeg and a stale lockfile behind. Clean these
+    // up so a fresh recording can't conflict with leftover state.
+    cleanup_stale_state();
+
+    // Write PID file. Must come after handler registration: this file is
+    // the CLI's readiness marker, so its existence guarantees a toggle can
+    // be handled rather than kill the daemon.
+    fs::write(PIDFILE, std::process::id().to_string())
+        .context("Failed to write PID file")?;
 
     // Validate environment and dependencies. effective_env() honors a
     // forced `backend` config override, keeping the startup log, display
