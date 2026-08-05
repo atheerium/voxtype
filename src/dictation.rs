@@ -70,6 +70,18 @@ pub fn detect_wayland_compositor() -> WaylandCompositor {
     }
 }
 
+/// The effective backend: the `backend` config override wins when set,
+/// otherwise auto-detection. Used everywhere backend choice matters
+/// (dependency checks, install hints, text injection) so a forced
+/// `backend = "x11"` behaves the same in each path.
+fn effective_env() -> DesktopEnv {
+    match Config::load().ok().and_then(|c| c.backend) {
+        Some(b) if b == "x11" => DesktopEnv::X11,
+        Some(b) if b == "wayland" => DesktopEnv::Wayland,
+        _ => detect_env(),
+    }
+}
+
 pub fn detect_audio_system() -> AudioSystem {
     // PipeWire >= 0.3 provides a pulse-compatible socket at the same path
     let pulse_info = Command::new("pactl")
@@ -287,7 +299,7 @@ fn validate_deps() -> Vec<String> {
     if !require_tool("ffmpeg") {
         missing.push("ffmpeg".to_string());
     }
-    let env = detect_env();
+    let env = effective_env();
     match env {
         DesktopEnv::X11 => {
             for tool in &["xdotool", "xsel", "xclip"] {
@@ -395,7 +407,7 @@ pub async fn run_daemon() -> Result<()> {
         let msg = format!(
             "Missing runtime dependencies: {}. Install with: {}",
             missing.join(", "),
-            deps_install_hint(env)
+            deps_install_hint(effective_env())
         );
         write_log(&msg);
         eprintln!("voxtype: {}", msg);
@@ -703,12 +715,7 @@ async fn transcribe(api_key: &str, config: &Config) -> Result<String> {
 // ── Text Injection ────────────────────────────────────────────
 
 fn inject_text(text: &str) -> Result<()> {
-    let config = Config::load()?;
-    let env = match config.backend.as_deref() {
-        Some("x11") => DesktopEnv::X11,
-        Some("wayland") => DesktopEnv::Wayland,
-        _ => detect_env(),
-    };
+    let env = effective_env();
 
     // Validate display env before attempting injection
     check_display_env(env)?;

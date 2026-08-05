@@ -27,10 +27,19 @@ fn spawn_daemon() -> Result<()> {
 fn send_signal(signal: &str, pid: u32) -> Result<()> {
     let flag = format!("-{}", signal);
     let pid_str = pid.to_string();
-    Command::new("kill")
+    let status = Command::new("kill")
         .args([flag.as_str(), pid_str.as_str()])
-        .output()
+        .status()
         .map_err(|e| anyhow::anyhow!("Failed to send {} to daemon: {}", signal, e))?;
+    if !status.success() {
+        // kill exits non-zero when the process is gone; give the user
+        // feedback instead of silently swallowing the failed toggle.
+        anyhow::bail!(
+            "Failed to send {} to daemon (pid {}). Is voxtype still running?",
+            signal,
+            pid
+        );
+    }
     Ok(())
 }
 
