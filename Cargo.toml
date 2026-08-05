@@ -12,13 +12,8 @@ keywords = [
     "voice-to-text",
     "dictation",
     "speech-to-text",
-    "whisper",
     "wispr-flow",
-    "voice-input",
-    "accessibility",
-    "wayland",
-    "x11",
-    "groq",
+    "whisper",
 ]
 categories = [
     "command-line-utilities",
