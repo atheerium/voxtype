@@ -179,6 +179,15 @@ On shutdown, the daemon:
 If the daemon crashes, `main.rs` uses `kill -0` to verify the PID is alive
 before sending signals. A new daemon writes a fresh PID file.
 
+### Startup self-healing after a crash
+If the previous daemon died mid-recording (crash or SIGKILL), it can leave an
+orphaned ffmpeg process and a stale lockfile. On startup the daemon kills the
+orphan (only if the PID actually belongs to ffmpeg, so a recycled PID is never
+touched) and clears the stale lock/audio state, so the first toggle records
+cleanly. The daemon also refuses to start a second instance while another live
+daemon owns the PID file, and registers its signal handlers before any slow
+startup checks so a hotkey pressed during startup can't kill it.
+
 ### notify-send not available
 Desktop notifications fall back to stderr output. You'll see messages like
 `[voxtype] Recording...` if you launched the toggle from a terminal.

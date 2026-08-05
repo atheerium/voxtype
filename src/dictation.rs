@@ -367,8 +367,10 @@ pub async fn run_daemon() -> Result<()> {
     let mut int = signal(SignalKind::interrupt())
         .context("Failed to setup SIGINT handler")?;
 
-    // Validate environment and dependencies
-    let env = detect_env();
+    // Validate environment and dependencies. effective_env() honors a
+    // forced `backend` config override, keeping the startup log, display
+    // check, and dependency validation consistent with inject_text.
+    let env = effective_env();
     let compositor = match env {
         DesktopEnv::Wayland => Some(detect_wayland_compositor()),
         DesktopEnv::X11 => None,
