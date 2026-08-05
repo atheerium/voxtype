@@ -51,7 +51,7 @@
 
   <g font-family="ui-monospace, Menlo, Consolas, monospace" font-size="12" fill="#34d399">
     <rect x="442" y="308" width="640" height="40" rx="8" fill="rgba(52,211,153,0.08)" stroke="rgba(52,211,153,0.35)"/>
-    <text x="462" y="333">curl -fsSL https://raw.githubusercontent.com/</text>
-    <text x="462" y="352">  atheerium/voxtype/main/install.sh | bash</text>
+    <text x="462" y="333">curl -fsSL github.com/atheerium/voxtype/</text>
+    <text x="462" y="352">  releases/latest/download/install.sh | bash</text>
   </g>
 </svg>

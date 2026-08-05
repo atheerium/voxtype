@@ -23,7 +23,7 @@
 ## 🚀 Install in one command
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh | bash
+curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
 ```
 
 That's it. The installer detects your display server and compositor, installs
@@ -34,8 +34,9 @@ starts the daemon.
 **You only need a Groq API key** (free at [console.groq.com](https://console.groq.com)) —
 set it once: `export GROQ_API_KEY="gsk_..."` or pass `--api-key` to the installer.
 
-> Try it without changing anything: `bash <(curl -fsSL .../install.sh) --dry-run`
-> previews every step.
+> Try it without changing anything: add `--dry-run` to preview every step.
+> Want the very latest installer from `main`? Use
+> `https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh` instead.
 
 ---
 
@@ -121,7 +122,7 @@ loop: *press, speak, done* — everywhere, for free.
 ### Option A: One-command installer (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh | bash
+curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
 ```
 
 The installer:
@@ -137,13 +138,13 @@ Useful flags:
 
 ```bash
 # Preview everything without touching your system
-bash <(curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh) --dry-run
+curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash -s -- --dry-run
 
 # Provide the API key non-interactively
-curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh | bash -s -- --api-key gsk_xxx
+curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash -s -- --api-key gsk_xxx
 
 # Build from source instead of downloading a binary
-curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh | bash -s -- --method source
+curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash -s -- --method source
 ```
 
 ### Option B: Build from source

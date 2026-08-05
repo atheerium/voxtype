@@ -66,11 +66,19 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
+
+      # Ship install.sh as a release asset too, so the one-liner
+      # https://github.com/atheerium/voxtype/releases/latest/download/install.sh
+      # is served by GitHub's fast object CDN instead of the laggy raw CDN.
+      - name: Stage installer
+        run: cp install.sh artifacts/install.sh
 
       - name: Create release and upload assets
         env:
