@@ -314,7 +314,17 @@ install_binary_source() {
   fi
   if have_cmd cargo; then
     say "Building voxtype from source with cargo (this takes a few minutes)..."
-    run cargo install --git "${REPO_URL}" --branch "$BRANCH" --root "$PREFIX" --locked
+    if ! run cargo install --git "${REPO_URL}" --branch "$BRANCH" --root "$PREFIX" --locked; then
+      # rustup shims exist but no default toolchain is configured; set one
+      # and retry once. This is safe and exactly what a Rust user wants.
+      if command -v rustup >/dev/null 2>&1 && ! rustup show active-toolchain >/dev/null 2>&1; then
+        warn "No default Rust toolchain configured; installing stable via rustup..."
+        run rustup default stable
+        run cargo install --git "${REPO_URL}" --branch "$BRANCH" --root "$PREFIX" --locked
+      else
+        return 1
+      fi
+    fi
     return 0
   fi
   if have_cmd git && have_cmd curl; then
