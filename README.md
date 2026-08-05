@@ -223,6 +223,7 @@ This usually means the keyboard paste shortcut doesn't match your app:
 | Terminal (Alacritty, foot, kitty, etc.) | **Ctrl+Shift+V** |
 | GUI app (browser, editor) | **Ctrl+V** |
 | GNOME apps | **Ctrl+V** |
+| VS Code (X11 or Wayland) | Automatic paste is skipped (shortcut conflict); use **Ctrl+V** / **Ctrl+Shift+V** manually |
 
 Text is always copied to the clipboard, so manual paste works.
 If automatic paste consistently fails for your setup, check `backend` config
