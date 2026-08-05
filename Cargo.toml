@@ -2,7 +2,32 @@
 name = "voxtype"
 version = "0.1.0"
 edition = "2021"
-description = "Voice-to-text dictation for X11/XFCE - press a key, speak, text appears"
+description = "Free, open-source voice-to-text dictation for Linux. Press Ctrl+Space, speak, and your words are typed into any app. A privacy-friendly, self-hostable alternative to Wispr Flow."
+license = "MIT"
+repository = "https://github.com/atheerium/voxtype"
+homepage = "https://github.com/atheerium/voxtype"
+readme = "README.md"
+keywords = [
+    "voice-to-text",
+    "dictation",
+    "speech-to-text",
+    "whisper",
+    "wispr-flow",
+    "voice-input",
+    "accessibility",
+    "wayland",
+    "x11",
+    "groq",
+]
+categories = [
+    "command-line-utilities",
+    "multimedia::audio",
+    "accessibility",
+]
+exclude = [
+    ".github",
+    "docs",
+]
 
 [[bin]]
 name = "voxtype"

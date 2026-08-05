@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest an idea for voxtype
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the pain point or use case.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should it work? Include any interface or config sketches.
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Would you be willing to help implement it?
+      options:
+        - Yes, I can contribute
+        - I can help test
+        - No, just an idea

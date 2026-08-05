@@ -23,7 +23,7 @@ pub enum DesktopEnv {
 pub enum WaylandCompositor {
     Sway,
     Hyprland,
-    KDE,
+    Kde,
     Gnome,
     Other,
 }
@@ -62,7 +62,7 @@ pub fn detect_wayland_compositor() -> WaylandCompositor {
     } else if desktop.contains("hyprland") {
         WaylandCompositor::Hyprland
     } else if desktop.contains("kde") || desktop.contains("plasma") {
-        WaylandCompositor::KDE
+        WaylandCompositor::Kde
     } else if desktop.contains("gnome") || desktop.contains("mutter") {
         WaylandCompositor::Gnome
     } else {
@@ -84,9 +84,7 @@ fn effective_env() -> DesktopEnv {
 
 pub fn detect_audio_system() -> AudioSystem {
     // PipeWire >= 0.3 provides a pulse-compatible socket at the same path
-    let pulse_info = Command::new("pactl")
-        .args(["info"])
-        .output();
+    let pulse_info = Command::new("pactl").args(["info"]).output();
     if let Ok(out) = &pulse_info {
         let stdout = String::from_utf8_lossy(&out.stdout);
         if stdout.contains("PipeWire") || stdout.contains("pipewire") {
@@ -117,23 +115,25 @@ pub fn deps_install_hint(env: DesktopEnv) -> &'static str {
 pub fn check_display_env(env: DesktopEnv) -> Result<()> {
     match env {
         DesktopEnv::X11 => {
-            let display = std::env::var("DISPLAY")
-                .map_err(|_| anyhow::anyhow!(
+            let display = std::env::var("DISPLAY").map_err(|_| {
+                anyhow::anyhow!(
                     "DISPLAY is not set. voxtype needs an X11 display.\n\
                      Make sure you're running this from within an X session.\n\
                      If using Wayland, set backend = \"wayland\" in config.toml."
-                ))?;
+                )
+            })?;
             if display.is_empty() {
                 anyhow::bail!("DISPLAY is set but empty. Check your X11 session.");
             }
         }
         DesktopEnv::Wayland => {
-            let wl = std::env::var("WAYLAND_DISPLAY")
-                .map_err(|_| anyhow::anyhow!(
+            let wl = std::env::var("WAYLAND_DISPLAY").map_err(|_| {
+                anyhow::anyhow!(
                     "WAYLAND_DISPLAY is not set. voxtype needs a Wayland compositor.\n\
                      Make sure you're running this from within a Wayland session.\n\
                      If using X11, set backend = \"x11\" in config.toml."
-                ))?;
+                )
+            })?;
             if wl.is_empty() {
                 anyhow::bail!("WAYLAND_DISPLAY is set but empty. Check your Wayland session.");
             }
@@ -148,13 +148,18 @@ pub fn check_display_env(env: DesktopEnv) -> Result<()> {
                     .filter(|p| !p.is_empty())
                     .map(PathBuf::from)
                     .or_else(dirs::runtime_dir)
-                    .ok_or_else(|| anyhow::anyhow!(
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
                         "Cannot determine Wayland runtime directory (XDG_RUNTIME_DIR is not set)"
-                    ))?;
+                    )
+                    })?;
                 runtime_dir.join(&wl)
             };
             if !socket.exists() {
-                anyhow::bail!("Wayland socket {} does not exist. Check your compositor.", socket.display());
+                anyhow::bail!(
+                    "Wayland socket {} does not exist. Check your compositor.",
+                    socket.display()
+                );
             }
         }
     }
@@ -174,7 +179,9 @@ pub fn daemon_running() -> bool {
 
 /// PID stored in the daemon PID file, if any.
 pub fn daemon_pid() -> Option<u32> {
-    fs::read_to_string(PIDFILE).ok().and_then(|c| c.trim().parse::<u32>().ok())
+    fs::read_to_string(PIDFILE)
+        .ok()
+        .and_then(|c| c.trim().parse::<u32>().ok())
 }
 
 fn process_alive(pid: u32) -> bool {
@@ -206,7 +213,9 @@ fn write_log(msg: &str) {
 
 fn chrono_now() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let d = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let secs = d.as_secs();
     let (y, mo, da) = civil_from_days((secs / 86400) as i64);
     let h = (secs % 86400) / 3600;
@@ -214,7 +223,13 @@ fn chrono_now() -> String {
     let s = secs % 60;
     format!(
         "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
-        y, mo, da, h, m, s, d.subsec_millis()
+        y,
+        mo,
+        da,
+        h,
+        m,
+        s,
+        d.subsec_millis()
     )
 }
 
@@ -275,7 +290,9 @@ fn clear_recording() {
 }
 
 fn read_lockfile_pid() -> Option<u32> {
-    fs::read_to_string(LOCKFILE).ok().and_then(|c| c.trim().parse::<u32>().ok())
+    fs::read_to_string(LOCKFILE)
+        .ok()
+        .and_then(|c| c.trim().parse::<u32>().ok())
 }
 
 fn kill_ffmpeg() {
@@ -351,12 +368,10 @@ pub async fn run_daemon() -> Result<()> {
     // sends SIGUSR1 after it observes the PID file, so writing it before
     // the handlers were installed would let a toggle arrive while SIGUSR1
     // still had its default disposition, which kills the process.
-    let mut usr1 = signal(SignalKind::user_defined1())
-        .context("Failed to setup SIGUSR1 handler")?;
-    let mut term = signal(SignalKind::terminate())
-        .context("Failed to setup SIGTERM handler")?;
-    let mut int = signal(SignalKind::interrupt())
-        .context("Failed to setup SIGINT handler")?;
+    let mut usr1 =
+        signal(SignalKind::user_defined1()).context("Failed to setup SIGUSR1 handler")?;
+    let mut term = signal(SignalKind::terminate()).context("Failed to setup SIGTERM handler")?;
+    let mut int = signal(SignalKind::interrupt()).context("Failed to setup SIGINT handler")?;
 
     // A previous daemon may have died mid-recording (crash or SIGKILL),
     // leaving an orphaned ffmpeg and a stale lockfile behind. Clean these
@@ -366,8 +381,7 @@ pub async fn run_daemon() -> Result<()> {
     // Write PID file. Must come after handler registration: this file is
     // the CLI's readiness marker, so its existence guarantees a toggle can
     // be handled rather than kill the daemon.
-    fs::write(PIDFILE, std::process::id().to_string())
-        .context("Failed to write PID file")?;
+    fs::write(PIDFILE, std::process::id().to_string()).context("Failed to write PID file")?;
 
     // Validate environment and dependencies. effective_env() honors a
     // forced `backend` config override, keeping the startup log, display
@@ -399,8 +413,12 @@ pub async fn run_daemon() -> Result<()> {
     }
 
     if let AudioSystem::None = audio {
-        write_log("WARNING: No audio system detected (pactl/pipewire not found). Recording will fail.");
-        eprintln!("voxtype WARNING: No audio system detected. Install pulseaudio-utils or pipewire.");
+        write_log(
+            "WARNING: No audio system detected (pactl/pipewire not found). Recording will fail.",
+        );
+        eprintln!(
+            "voxtype WARNING: No audio system detected. Install pulseaudio-utils or pipewire."
+        );
     } else {
         write_log(&format!("Audio system: {:?}", audio));
     }
@@ -540,9 +558,7 @@ fn start_recording() -> Result<()> {
 
     // Check ffmpeg availability
     if !require_tool("ffmpeg") {
-        anyhow::bail!(
-            "ffmpeg not found. Install: sudo apt install ffmpeg"
-        );
+        anyhow::bail!("ffmpeg not found. Install: sudo apt install ffmpeg");
     }
 
     // Check audio system
@@ -550,9 +566,7 @@ fn start_recording() -> Result<()> {
     match audio {
         AudioSystem::PulseAudio | AudioSystem::PipeWire => {
             // pactl info works for both pulseaudio and pipewire-pulse
-            let pa_check = Command::new("pactl")
-                .args(["info"])
-                .output();
+            let pa_check = Command::new("pactl").args(["info"]).output();
             if let Err(e) = pa_check {
                 anyhow::bail!(
                     "pactl info failed ({}). Is PulseAudio/PipeWire running?\n\
@@ -579,12 +593,18 @@ fn start_recording() -> Result<()> {
     let child = TokioCommand::new("ffmpeg")
         .args([
             "-y",
-            "-f", "pulse",
-            "-i", &audio_source,
-            "-ac", "1",
-            "-ar", "16000",
-            "-b:a", "64k",
-            "-loglevel", "error",
+            "-f",
+            "pulse",
+            "-i",
+            &audio_source,
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-b:a",
+            "64k",
+            "-loglevel",
+            "error",
             AUDIO_FILE,
         ])
         .stdout(std::process::Stdio::null())
@@ -653,8 +673,7 @@ async fn transcribe(api_key: &str, config: &Config) -> Result<String> {
         .build()
         .context("Failed to create HTTP client")?;
 
-    let audio_bytes = fs::read(AUDIO_FILE)
-        .context("Failed to read audio file for upload")?;
+    let audio_bytes = fs::read(AUDIO_FILE).context("Failed to read audio file for upload")?;
 
     // Groq has a ~25MB file limit, check early
     if audio_too_large(audio_bytes.len()) {
@@ -688,7 +707,9 @@ async fn transcribe(api_key: &str, config: &Config) -> Result<String> {
         .context("Failed to reach Groq API (check network/internet)")?;
 
     let status = response.status();
-    let body = response.text().await
+    let body = response
+        .text()
+        .await
         .context("Failed to read API response")?;
 
     if !status.is_success() {
@@ -736,8 +757,9 @@ fn inject_text_x11(text: &str) -> Result<()> {
 
     // 2. Fallback to xclip if xsel fails
     if !xsel_ok {
-        set_clipboard_xclip(text)
-            .context("Both xsel and xclip failed to set clipboard. Install: sudo apt install xsel xclip")?;
+        set_clipboard_xclip(text).context(
+            "Both xsel and xclip failed to set clipboard. Install: sudo apt install xsel xclip",
+        )?;
     }
 
     // 3. Wait for clipboard propagation
@@ -745,7 +767,9 @@ fn inject_text_x11(text: &str) -> Result<()> {
 
     // 4. VS Code has keyboard shortcut conflicts with xdotool paste
     if is_vscode_window_x11() {
-        write_log("VS Code detected — skipping keyboard paste (clipboard set). Manual paste: Ctrl+V");
+        write_log(
+            "VS Code detected — skipping keyboard paste (clipboard set). Manual paste: Ctrl+V",
+        );
         return Ok(());
     }
 
@@ -846,7 +870,8 @@ fn set_clipboard_wl_copy(text: &str) -> Result<()> {
         })?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(text.as_bytes())
+        stdin
+            .write_all(text.as_bytes())
             .context("Failed to write to wl-copy stdin")?;
     }
 
@@ -862,7 +887,8 @@ fn set_clipboard_xsel(text: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("xsel not found: {}. Install: sudo apt install xsel", e))?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(text.as_bytes())
+        stdin
+            .write_all(text.as_bytes())
             .context("Failed to write to xsel stdin")?;
     }
 
@@ -878,7 +904,8 @@ fn set_clipboard_xclip(text: &str) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("xclip not found: {}. Install: sudo apt install xclip", e))?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(text.as_bytes())
+        stdin
+            .write_all(text.as_bytes())
             .context("Failed to write to xclip stdin")?;
     }
 
@@ -892,18 +919,46 @@ fn set_clipboard_xclip(text: &str) -> Result<()> {
 /// e.g. `WM_CLASS(STRING) = "alacritty", "Alacritty"` -> `alacritty`.
 fn parse_wm_class(output: &str) -> Option<String> {
     let class = output.rsplit('"').nth(1)?.trim().to_lowercase();
-    if class.is_empty() { None } else { Some(class) }
+    if class.is_empty() {
+        None
+    } else {
+        Some(class)
+    }
 }
 
 fn is_known_terminal(name: &str) -> bool {
     const KNOWN_TERMINALS: &[&str] = &[
-        "alacritty", "xfce4-terminal", "xfterminal", "gnome-terminal",
-        "gnome-terminal-server", "konsole", "xterm", "uxterm",
-        "urxvt", "urxvtc", "terminator", "tilix", "kitty",
-        "wezterm", "st", "st-256color", "rxvt", "foot", "footclient",
-        "guake", "mate-terminal", "lxterminal", "cool-retro-term",
-        "deepin-terminal", "sakura", "termite", "ghostty",
-        "blackbox", "contour", "tabby", "warp-terminal",
+        "alacritty",
+        "xfce4-terminal",
+        "xfterminal",
+        "gnome-terminal",
+        "gnome-terminal-server",
+        "konsole",
+        "xterm",
+        "uxterm",
+        "urxvt",
+        "urxvtc",
+        "terminator",
+        "tilix",
+        "kitty",
+        "wezterm",
+        "st",
+        "st-256color",
+        "rxvt",
+        "foot",
+        "footclient",
+        "guake",
+        "mate-terminal",
+        "lxterminal",
+        "cool-retro-term",
+        "deepin-terminal",
+        "sakura",
+        "termite",
+        "ghostty",
+        "blackbox",
+        "contour",
+        "tabby",
+        "warp-terminal",
     ];
     KNOWN_TERMINALS.contains(&name)
 }
@@ -915,11 +970,15 @@ fn paste_keys_for(compositor: WaylandCompositor) -> &'static [&'static [&'static
         // GNOME: most apps use Ctrl+V; terminals need Ctrl+Shift+V
         WaylandCompositor::Gnome => &[
             &["-M", "ctrl", "-k", "v", "-m", "ctrl"],
-            &["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "ctrl", "-m", "shift"],
+            &[
+                "-M", "ctrl", "-M", "shift", "-k", "v", "-m", "ctrl", "-m", "shift",
+            ],
         ],
         // Sway/Hyprland/KDE: terminals common, try Ctrl+Shift+V first
         _ => &[
-            &["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "ctrl", "-m", "shift"],
+            &[
+                "-M", "ctrl", "-M", "shift", "-k", "v", "-m", "ctrl", "-m", "shift",
+            ],
             &["-M", "ctrl", "-k", "v", "-m", "ctrl"],
         ],
     }
@@ -932,9 +991,7 @@ fn audio_too_large(len: usize) -> bool {
 
 fn is_terminal_window() -> bool {
     // Step 1: Get active window ID via xdotool
-    let winid = Command::new("xdotool")
-        .args(["getactivewindow"])
-        .output();
+    let winid = Command::new("xdotool").args(["getactivewindow"]).output();
 
     let winid = match winid {
         Ok(out) => String::from_utf8_lossy(&out.stdout).trim().to_string(),
@@ -966,7 +1023,9 @@ fn is_terminal_window() -> bool {
                         class,
                         if is_term { "terminal" } else { "not terminal" }
                     ));
-                    if is_term { return true; }
+                    if is_term {
+                        return true;
+                    }
                 }
                 None => {
                     write_log(&format!("Could not parse WM_CLASS from: {}", stdout.trim()));
@@ -990,11 +1049,14 @@ fn is_terminal_window() -> bool {
                 .args(["-p", &pid_num.to_string(), "-o", "comm="])
                 .output()
             {
-                let proc_name = String::from_utf8_lossy(&ps_out.stdout).trim().to_lowercase();
+                let proc_name = String::from_utf8_lossy(&ps_out.stdout)
+                    .trim()
+                    .to_lowercase();
                 let is_term = is_known_terminal(&proc_name);
                 write_log(&format!(
                     "PID {} process: '{}' -> {}",
-                    pid_num, proc_name,
+                    pid_num,
+                    proc_name,
                     if is_term { "terminal" } else { "not terminal" }
                 ));
                 return is_term;
@@ -1022,7 +1084,10 @@ fn is_vscode_window_x11() -> bool {
         return false;
     }
 
-    match Command::new("xprop").args(["-id", &winid, "WM_CLASS"]).output() {
+    match Command::new("xprop")
+        .args(["-id", &winid, "WM_CLASS"])
+        .output()
+    {
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout);
             if let Some(class) = parse_wm_class(&stdout) {
@@ -1030,7 +1095,8 @@ fn is_vscode_window_x11() -> bool {
                 let is_ide = known_ides.contains(&class.as_str());
                 if is_ide {
                     write_log(&format!(
-                        "Window WM_CLASS: '{}' -> IDE, skipping keyboard paste", class
+                        "Window WM_CLASS: '{}' -> IDE, skipping keyboard paste",
+                        class
                     ));
                 }
                 return is_ide;
@@ -1072,7 +1138,10 @@ mod tests {
         );
         assert_eq!(parse_wm_class(""), None);
         assert_eq!(parse_wm_class("WM_CLASS(STRING) = "), None);
-        assert_eq!(parse_wm_class(r#"WM_CLASS(STRING) = "code", "Code""#), Some("code".to_string()));
+        assert_eq!(
+            parse_wm_class(r#"WM_CLASS(STRING) = "code", "Code""#),
+            Some("code".to_string())
+        );
     }
 
     #[test]
@@ -1165,7 +1234,7 @@ mod tests {
         std::env::set_var("XDG_CURRENT_DESKTOP", "sway");
         assert_eq!(detect_wayland_compositor(), WaylandCompositor::Sway);
         std::env::set_var("XDG_CURRENT_DESKTOP", "KDE");
-        assert_eq!(detect_wayland_compositor(), WaylandCompositor::KDE);
+        assert_eq!(detect_wayland_compositor(), WaylandCompositor::Kde);
         std::env::set_var("XDG_CURRENT_DESKTOP", "GNOME");
         assert_eq!(detect_wayland_compositor(), WaylandCompositor::Gnome);
         std::env::set_var("XDG_CURRENT_DESKTOP", "Hyprland");

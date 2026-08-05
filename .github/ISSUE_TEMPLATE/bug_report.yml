@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a problem with voxtype
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what actually happened?
+    validations:
+      required: true
+  - type: dropdown
+    id: display
+    attributes:
+      label: Display server
+      options: [X11, Wayland, Not sure]
+    validations:
+      required: true
+  - type: input
+    id: desktop
+    attributes:
+      label: Desktop / compositor
+      description: e.g. Sway, Hyprland, KDE Plasma, GNOME, XFCE, i3
+  - type: input
+    id: distro
+    attributes:
+      label: Distro and version
+      description: e.g. Ubuntu 24.04, Arch, Fedora 40
+  - type: input
+    id: version
+    attributes:
+      label: voxtype version
+      description: git tag, commit, or "built from source"
+  - type: textarea
+    id: log
+    attributes:
+      label: Daemon log
+      description: Paste the relevant lines from ~/.local/share/voxtype/daemon.log
+      render: shell
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps (including any config.toml settings)

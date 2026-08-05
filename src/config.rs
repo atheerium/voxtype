@@ -25,7 +25,13 @@ impl Config {
             return Ok(config);
         }
 
-        Ok(Config { groq_api_key: None, model: None, language: None, backend: None, audio_source: None })
+        Ok(Config {
+            groq_api_key: None,
+            model: None,
+            language: None,
+            backend: None,
+            audio_source: None,
+        })
     }
 
     pub fn groq_api_key(&self) -> Result<String> {
@@ -130,7 +136,10 @@ mod tests {
             parse_env_assignment("export OTHER=1 GROQ_API_KEY=gsk_abc", "GROQ_API_KEY"),
             Some("gsk_abc".to_string())
         );
-        assert_eq!(parse_env_assignment("export PATH=/usr/bin", "GROQ_API_KEY"), None);
+        assert_eq!(
+            parse_env_assignment("export PATH=/usr/bin", "GROQ_API_KEY"),
+            None
+        );
         assert_eq!(parse_env_assignment("GROQ_API_KEY=", "GROQ_API_KEY"), None);
         assert_eq!(parse_env_assignment("", "GROQ_API_KEY"), None);
     }
@@ -193,10 +202,8 @@ mod tests {
         // With no config key and no env var, resolution fails unless the
         // user's shell rc files leak a real key in. Point HOME at an empty
         // dir so this test is deterministic on any machine.
-        let empty_home = std::env::temp_dir().join(format!(
-            "voxtype-test-home-{}",
-            std::process::id()
-        ));
+        let empty_home =
+            std::env::temp_dir().join(format!("voxtype-test-home-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&empty_home);
         let original_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", &empty_home);

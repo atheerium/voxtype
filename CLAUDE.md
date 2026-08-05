@@ -4,9 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**voxtype** is a voice-to-text dictation tool for Linux. Press a hotkey, speak, and the transcribed text is automatically pasted into your active application.
+**voxtype** is a free, open-source voice-to-text dictation tool for Linux —
+marketed as the "Wispr Flow alternative." Press a hotkey, speak, and the transcribed text is automatically pasted into your active application.
 
 Supports X11 (XFCE, GNOME X11, i3) and Wayland (Sway, Hyprland, KDE, GNOME) via auto-detection.
+
+Published at https://github.com/atheerium/voxtype (public, `main` branch).
 
 ## Build Commands
 
@@ -14,9 +17,27 @@ Supports X11 (XFCE, GNOME X11, i3) and Wayland (Sway, Hyprland, KDE, GNOME) via 
 cargo build --release    # Build optimized binary
 cargo build              # Debug build
 cargo test               # Unit tests (11 tests: config parsing, env detection, helpers)
+cargo clippy --all-targets -- -D warnings   # CI enforces zero warnings
+cargo fmt --check        # CI checks formatting
 ```
 
 The binary is output to `target/release/voxtype`.
+
+## Release & Installer
+
+- **README.md** is the marketing/SEO surface: one-command install at the top,
+  Wispr Flow comparison, FAQ. Keep install commands in sync with `install.sh`.
+- **install.sh** is the one-command installer (`curl -fsSL https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh | bash`).
+  - Detects display server/compositor/distro, installs deps, downloads a
+    prebuilt binary from GitHub Releases (assets named `voxtype-<triple>.tar.gz`
+    with `sha256sums.txt`), falls back to `cargo install --git`.
+  - Validate with `shellcheck install.sh`, `bash -n install.sh`, and
+    `bash install.sh --dry-run`.
+  - Never break `--dry-run` (it must not touch the system or the network).
+- **Release flow**: pushing a `v*` tag runs `.github/workflows/release.yml`,
+  which builds `x86_64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, and
+  `aarch64-unknown-linux-musl` and publishes a GitHub Release.
+- **CI** (`.github/workflows/ci.yml`): fmt, clippy `-D warnings`, tests, release build, installer lint.
 
 ## Architecture
 
@@ -65,7 +86,8 @@ Optional: `notify-send` (desktop notifications), `pactl` (audio device detection
 ## Hotkey Setup
 
 - **XFCE**: `xfconf-query` to bind Ctrl+Space
-- **Sway**: `bindsym --to-code Ctrl+space exec /path/to/voxtype`
+- **Sway**: `bindsym Ctrl+space exec /path/to/voxtype` (NOT `--to-code`; plain
+  bindsym is what works reliably — the `--to-code` form failed to fire on sway 1.9)
 - **Hyprland**: `bind = CTRL, SPACE, exec, /path/to/voxtype`
 
 Add to autostart with `voxtype --daemon`.
