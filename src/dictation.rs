@@ -1973,4 +1973,52 @@ mod tests {
             panic!("paste shortcut did not reach xev; log contains {:?}", got);
         }
     }
+
+    /// Live acceptance test: injection must stay bounded even when the paste
+    /// tool hangs.
+    ///
+    /// Puts a fake `wtype` that sleeps forever on PATH, runs the real
+    /// `inject_text_wayland`, and asserts it returns (with the clipboard
+    /// fallback) well before a hung wtype would ever finish. This is the
+    /// behavior that directly fixes the old multi-second stalls.
+    #[test]
+    #[ignore]
+    fn live_wayland_bounded_smoke() {
+        use std::os::unix::fs::PermissionsExt;
+
+        if std::env::var("VOXTYPE_BOUNDED_SMOKE").as_deref() != Ok("1") {
+            eprintln!("skipping: VOXTYPE_BOUNDED_SMOKE=1 not set");
+            return;
+        }
+        if detect_env() != DesktopEnv::Wayland {
+            panic!("bounded smoke test requires Wayland");
+        }
+
+        let fake_dir = format!("/tmp/voxtype-fake-bin-{}", std::process::id());
+        let _ = std::fs::create_dir_all(&fake_dir);
+        let fake_wtype = format!("{}/wtype", fake_dir);
+        std::fs::write(&fake_wtype, "#!/bin/sh\nexec sleep 30\n").unwrap();
+        std::fs::set_permissions(&fake_wtype, PermissionsExt::from_mode(0o755)).unwrap();
+
+        let orig_path = std::env::var("PATH").unwrap_or_default();
+        std::env::set_var("PATH", format!("{}:{}", fake_dir, orig_path));
+
+        let t0 = std::time::Instant::now();
+        let result = inject_text_wayland("bounded smoke test");
+        let elapsed = t0.elapsed();
+        let _ = std::fs::remove_dir_all(&fake_dir);
+        std::env::set_var("PATH", orig_path);
+
+        assert!(
+            elapsed < Duration::from_secs(8),
+            "injection took {:?} with a hanging wtype; expected a few seconds",
+            elapsed
+        );
+        assert!(
+            result.is_ok(),
+            "injection should fall back gracefully: {:?}",
+            result
+        );
+        eprintln!("bounded injection returned Ok in {:?}", elapsed);
+    }
 }
