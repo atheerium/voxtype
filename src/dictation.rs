@@ -2021,4 +2021,80 @@ mod tests {
         );
         eprintln!("bounded injection returned Ok in {:?}", elapsed);
     }
+
+    /// Live end-user acceptance test: dictation text must actually land in a
+    /// focused text field.
+    ///
+    /// Launches `zenity --entry` under XWayland (GDK_BACKEND=x11), focuses it,
+    /// runs the real `inject_text_wayland` (which routes to the X11 injector),
+    /// presses Return, and reads back what zenity's entry contained. This is
+    /// the real acceptance path: the text the user dictated must appear in the
+    /// field. Ignores any text already in the entry by clearing nothing; the
+    /// marker is checked as a substring.
+    #[test]
+    #[ignore]
+    fn live_xwayland_text_e2e() {
+        if std::env::var("VOXTYPE_XWAYLAND_E2E").as_deref() != Ok("1") {
+            eprintln!("skipping: VOXTYPE_XWAYLAND_E2E=1 not set");
+            return;
+        }
+        if detect_env() != DesktopEnv::Wayland
+            || detect_wayland_compositor() != WaylandCompositor::Sway
+        {
+            panic!("xwayland e2e test requires Sway on Wayland");
+        }
+        if !require_tool("zenity") || !require_tool("xdotool") {
+            panic!("xwayland e2e test requires zenity and xdotool");
+        }
+
+        let out_path = format!("/tmp/voxtype-e2e-{}.txt", std::process::id());
+        let out_file = std::fs::File::create(&out_path).unwrap();
+        let mut zenity = Command::new("zenity")
+            .env("GDK_BACKEND", "x11")
+            .args(["--entry", "--title", "voxtype-e2e"])
+            .stdout(std::process::Stdio::from(out_file))
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("spawn zenity");
+
+        // Focus the dialog and confirm it is the focused XWayland window.
+        std::thread::sleep(Duration::from_millis(1500));
+        let _ = Command::new("swaymsg")
+            .args(["[title=voxtype-e2e]", "focus"])
+            .output();
+        std::thread::sleep(Duration::from_millis(300));
+        let target =
+            detect_focus_target(WaylandCompositor::Sway).expect("no focused window detected");
+        assert!(
+            target.xwayland,
+            "expected an XWayland zenity dialog, got {:?}",
+            target
+        );
+
+        let marker = format!("voxtype e2e marker {}", std::process::id());
+        inject_text_wayland(&marker).expect("inject_text_wayland failed");
+
+        // Press Return in the dialog: the default button confirms and zenity
+        // prints the entry text to its stdout (our file).
+        let _ = Command::new("xdotool").args(["key", "Return"]).output();
+
+        let mut landed = false;
+        for _ in 0..50 {
+            if let Ok(Some(status)) = zenity.try_wait() {
+                let got = std::fs::read_to_string(&out_path).unwrap_or_default();
+                landed = status.success() && got.contains(&marker);
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        let _ = zenity.kill();
+        let got = std::fs::read_to_string(&out_path).unwrap_or_default();
+        let _ = std::fs::remove_file(&out_path);
+        assert!(
+            landed,
+            "dictated text did not land in the field; zenity output was {:?}",
+            got
+        );
+        eprintln!("xwayland e2e: text landed in the field");
+    }
 }
