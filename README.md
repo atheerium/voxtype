@@ -316,12 +316,15 @@ for short recordings; the whole loop is usually well under 5 seconds.
 **Paste is slow or nothing appears in the focused app — what should I check?**
 voxtype bounds every paste step, so injection itself never blocks for more than
 a few seconds; if text does not appear, the clipboard is still set for a manual
-paste. On Wayland with Sway, a known failure mode is an old `wtype`: the 0.4
-build shipped by Debian/Ubuntu sends a truncated keymap that Sway silently
-drops for native Wayland windows (XWayland apps usually still work). If you
-dictate mostly into native Wayland apps, try a newer `wtype` build or
-`ydotool`. voxtype auto-routes XWayland windows (e.g. Chrome under XWayland)
-through the X11 injector, which bypasses the problem entirely.
+paste. On Sway 1.9 (and some other wlroots versions) there is a compositor bug:
+`zwp_virtual_keyboard_v1` input — what `wtype` and voxtype's native injector
+use — is silently dropped for **native Wayland** windows, while **XWayland**
+windows still receive it. This is not a voxtype defect (verified with wtype and
+a from-scratch client sending a correct full keymap in both keycode spaces).
+voxtype already routes XWayland windows through the X11 injector, which works
+reliably. For native Wayland apps on an affected compositor, either upgrade
+`sway`, run the app under XWayland (e.g. Chrome with `--ozone-platform=x11`),
+or use `ydotool`.
 
 ## Roadmap
 
