@@ -1773,6 +1773,51 @@ mod tests {
         }
     }
 
+    /// The wtype path uses capture + timeout together; a hung child must be
+    /// killed promptly without the drain threads hanging the caller.
+    #[test]
+    fn capture_times_out_without_hanging() {
+        let t0 = std::time::Instant::now();
+        let outcome = run_limited_capture(
+            Command::new("sh").args(["-c", "exec sleep 5"]),
+            Duration::from_millis(200),
+        );
+        let elapsed = t0.elapsed();
+        assert!(matches!(outcome, CommandOutcome::TimedOut));
+        assert!(
+            elapsed < Duration::from_secs(3),
+            "capture+timeout took {:?}",
+            elapsed
+        );
+    }
+
+    /// A wedged notification daemon must not hold up the toggle: notify-send
+    /// is bounded even when the real tool would hang forever.
+    #[test]
+    fn notify_bounded_when_daemon_hangs() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fake_dir = format!("/tmp/voxtype-fake-bin-{}", std::process::id());
+        let _ = std::fs::create_dir_all(&fake_dir);
+        let fake = format!("{}/notify-send", fake_dir);
+        std::fs::write(&fake, "#!/bin/sh\nexec sleep 30\n").unwrap();
+        std::fs::set_permissions(&fake, PermissionsExt::from_mode(0o755)).unwrap();
+
+        let orig_path = std::env::var("PATH").unwrap_or_default();
+        std::env::set_var("PATH", format!("{}:{}", fake_dir, orig_path));
+        let t0 = std::time::Instant::now();
+        notify("voxtype test", "bounded");
+        let elapsed = t0.elapsed();
+        let _ = std::fs::remove_dir_all(&fake_dir);
+        std::env::set_var("PATH", orig_path);
+
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "notify with a hanging daemon took {:?}",
+            elapsed
+        );
+    }
+
     #[test]
     fn command_stdin_payload_is_written() {
         let outcome = run_limited_with_stdin(
