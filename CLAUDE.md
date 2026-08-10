@@ -66,6 +66,7 @@ Ctrl+Space → voxtype CLI → SIGUSR1 → Daemon (background)
 - **Startup self-healing**: a crashed daemon leaves an orphaned ffmpeg + stale lockfile; startup kills the orphan (PID verified against `/proc` so a recycled PID is never touched) and clears stale lock/audio state.
 - **Toggle Guard**: `AtomicBool` prevents concurrent toggle operations — rapid hotkey presses are safely dropped.
 - **Graceful Degradation**: Missing tools (xdotool, wtype, notify-send) are handled with fallbacks. Clipboard is always set even if keyboard paste fails. VS Code is detected (focused window on X11, `pgrep` on Wayland) and keyboard paste is skipped for it due to a shortcut conflict.
+- **Bounded, window-aware text injection**: every external command in the injection path (wl-copy, wl-paste, wtype, xdotool, swaymsg, notify-send) runs with a hard timeout via `run_limited`, so a wedged tool can never block dictation for more than a few seconds. On Wayland, the focused window is detected via Sway/Hyprland IPC (`app_id` / `window_properties`), the clipboard offer is verified with `wl-paste` before the paste key is sent, and known apps get exactly one shortcut (terminals: Ctrl+Shift+V, browsers: Ctrl+V) instead of a blind fallback chain. XWayland windows are routed through the X11 injector (xdotool + xsel), which is faster and avoids the Wayland↔X clipboard bridge. Injection runs on a blocking thread so the async runtime never freezes. Diagnostics (focus class, clipboard verification timing, per-attempt results) go to the daemon log.
 - **Environment Detection**: Auto-detects X11 vs Wayland, compositor (Sway/Hyprland/KDE/Gnome), and audio system (PulseAudio/PipeWire). `effective_env()` resolves the backend once — config `backend` override wins, else auto-detection — and is used consistently by startup logging, the display check, dependency validation, and text injection.
 - **Log timestamps** are UTC with full date: `2026-08-05 21:38:43.817`. Written to `~/.local/share/voxtype/daemon.log`.
 
@@ -88,7 +89,7 @@ Key resolution order: config file → `GROQ_API_KEY` env var → shell RC files.
 X11: `ffmpeg`, `xdotool`, `xsel`, `xclip`
 Wayland: `ffmpeg`, `wl-clipboard`, `wtype`
 
-Optional: `notify-send` (desktop notifications), `pactl` (audio device detection)
+Optional: `notify-send` (desktop notifications), `pactl` (audio device detection), `swaymsg` (Sway) / `hyprctl` (Hyprland) for focused-window-aware paste
 
 ## Hotkey Setup
 

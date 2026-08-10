@@ -92,7 +92,7 @@ Ctrl+Space → voxtype CLI → SIGUSR1 → voxtype daemon (background)
 2. The daemon records your microphone with **ffmpeg** (16 kHz mono, ~64 kbps) into a temp file.
 3. You press <kbd>Ctrl</kbd>+<kbd>Space</kbd> again. The daemon stops recording and uploads the audio to **Groq's Whisper API**.
 4. The transcribed text is copied to your clipboard and **pasted into the focused app** automatically.
-5. On Wayland, paste uses `wtype` with compositor-aware shortcuts; on X11, `xdotool` detects terminal vs GUI apps.
+5. On Wayland, voxtype detects the focused window (Sway/Hyprland IPC) and picks the right paste shortcut — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> in terminals, <kbd>Ctrl</kbd>+<kbd>V</kbd> in browsers — verifies the clipboard is live before pasting, and falls back to a compositor-aware key sequence. XWayland windows are injected through the X11 path for speed. Every step is timeout-bounded, so a wedged tool can never block dictation. On X11, `xdotool` detects terminal vs GUI apps.
 
 ## voxtype vs Wispr Flow
 
@@ -312,6 +312,16 @@ small change — contributions welcome.
 **How fast is transcription?**
 Groq's Whisper endpoint typically returns results in under a couple of seconds
 for short recordings; the whole loop is usually well under 5 seconds.
+
+**Paste is slow or nothing appears in the focused app — what should I check?**
+voxtype bounds every paste step, so injection itself never blocks for more than
+a few seconds; if text does not appear, the clipboard is still set for a manual
+paste. On Wayland with Sway, a known failure mode is an old `wtype`: the 0.4
+build shipped by Debian/Ubuntu sends a truncated keymap that Sway silently
+drops for native Wayland windows (XWayland apps usually still work). If you
+dictate mostly into native Wayland apps, try a newer `wtype` build or
+`ydotool`. voxtype auto-routes XWayland windows (e.g. Chrome under XWayland)
+through the X11 injector, which bypasses the problem entirely.
 
 ## Roadmap
 

@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
 use reqwest::multipart;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 use tokio::process::Command as TokioCommand;
 use tokio::signal::unix::{signal, SignalKind};
 
@@ -339,14 +340,16 @@ fn validate_deps() -> Vec<String> {
 // ── Notification ──────────────────────────────────────────────────
 
 /// Send a desktop notification if notify-send is available.
+/// Bounded: a wedged notification daemon must not hold up the toggle loop.
 /// Falls back to stderr (useful when running from terminal or
 /// when no notification daemon is installed).
 fn notify(summary: &str, body: &str) {
-    let sent = Command::new("notify-send")
-        .args(["-a", "voxtype", summary, body])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    let mut cmd = Command::new("notify-send");
+    cmd.args(["-a", "voxtype", summary, body]);
+    let sent = matches!(
+        run_limited(&mut cmd, NOTIFY_TIMEOUT),
+        CommandOutcome::Completed(o) if o.status.success()
+    );
 
     if !sent {
         // Fallback: write to stderr so users launching from terminal see it
@@ -660,8 +663,14 @@ async fn stop_and_transcribe() -> Result<String> {
         anyhow::bail!("Transcription returned empty (no speech detected)");
     }
 
-    // Check that we can inject before removing the audio file
-    inject_text(&text)?;
+    // Check that we can inject before removing the audio file. Injection
+    // spawns external tools; run it on a blocking thread so a wedged tool
+    // (every step is timeout-bounded inside inject_text) never freezes the
+    // async runtime or drops queued toggles.
+    let inject = text.clone();
+    tokio::task::spawn_blocking(move || inject_text(&inject))
+        .await
+        .context("Injection task panicked")??;
 
     let _ = fs::remove_file(AUDIO_FILE);
     Ok(text)
@@ -739,6 +748,128 @@ async fn transcribe(api_key: &str, config: &Config) -> Result<String> {
 
 // ── Text Injection ────────────────────────────────────────────
 
+/// Upper bound for clipboard-set commands (wl-copy, xsel, xclip). These
+/// daemonize after writing their data; a parent that stays alive means the
+/// selection was never offered, so we kill it and report instead of blocking.
+const CLIP_CMD_TIMEOUT: Duration = Duration::from_secs(3);
+/// Per-attempt budget for a wtype paste. The virtual-keyboard protocol can
+/// wedge under compositor load; never let it block dictation indefinitely.
+const WTYPE_TIMEOUT: Duration = Duration::from_millis(2500);
+/// Budget for verifying the clipboard via wl-paste before sending the key.
+const VERIFY_TIMEOUT: Duration = Duration::from_millis(1500);
+/// Budget for compositor IPC (swaymsg / hyprctl) used in focus detection.
+const IPC_TIMEOUT: Duration = Duration::from_millis(800);
+/// Budget for desktop notifications; a wedged notification daemon must not
+/// hold up the toggle.
+const NOTIFY_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Outcome of a bounded external command run.
+#[derive(Debug)]
+enum CommandOutcome {
+    Completed(std::process::Output),
+    TimedOut,
+    Failed(String),
+}
+
+/// Run `cmd` to completion, killing it if it exceeds `limit`.
+///
+/// When `capture` is false, stdout/stderr go to /dev/null. This matters for
+/// daemonizing tools (wl-copy, xsel, xclip): they fork a child that inherits
+/// the std fds, and a pipe held open by that child would block the reader
+/// forever. When `capture` is true the streams are drained on background
+/// threads so a chatty child can never deadlock the wait. `input`, when set,
+/// is written to the child's stdin on a background thread.
+fn run_limited_with_stdin(
+    cmd: &mut Command,
+    limit: Duration,
+    input: Option<&[u8]>,
+    capture: bool,
+) -> CommandOutcome {
+    if capture {
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+    } else {
+        cmd.stdout(std::process::Stdio::null());
+        cmd.stderr(std::process::Stdio::null());
+    }
+    if input.is_some() {
+        cmd.stdin(std::process::Stdio::piped());
+    }
+
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => return CommandOutcome::Failed(e.to_string()),
+    };
+
+    if let (Some(mut stdin), Some(data)) = (child.stdin.take(), input) {
+        let data = data.to_vec();
+        let _ = thread::spawn(move || {
+            let _ = stdin.write_all(&data);
+        });
+    }
+
+    let stdout_thread = if capture {
+        child.stdout.take().map(|mut s| {
+            thread::spawn(move || {
+                let mut buf = Vec::new();
+                let _ = s.read_to_end(&mut buf);
+                buf
+            })
+        })
+    } else {
+        None
+    };
+    let stderr_thread = if capture {
+        child.stderr.take().map(|mut s| {
+            thread::spawn(move || {
+                let mut buf = Vec::new();
+                let _ = s.read_to_end(&mut buf);
+                buf
+            })
+        })
+    } else {
+        None
+    };
+
+    let deadline = Instant::now() + limit;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return CommandOutcome::TimedOut;
+                }
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(e) => return CommandOutcome::Failed(e.to_string()),
+        }
+    };
+
+    let stdout = stdout_thread
+        .and_then(|h| h.join().ok())
+        .unwrap_or_default();
+    let stderr = stderr_thread
+        .and_then(|h| h.join().ok())
+        .unwrap_or_default();
+    CommandOutcome::Completed(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
+/// Bounded run without output capture (for daemonizing tools).
+fn run_limited(cmd: &mut Command, limit: Duration) -> CommandOutcome {
+    run_limited_with_stdin(cmd, limit, None, false)
+}
+
+/// Bounded run with stdout/stderr captured (for one-shot tools).
+fn run_limited_capture(cmd: &mut Command, limit: Duration) -> CommandOutcome {
+    run_limited_with_stdin(cmd, limit, None, true)
+}
+
 fn inject_text(text: &str) -> Result<()> {
     let env = effective_env();
 
@@ -749,6 +880,16 @@ fn inject_text(text: &str) -> Result<()> {
         DesktopEnv::X11 => inject_text_x11(text),
         DesktopEnv::Wayland => inject_text_wayland(text),
     }
+}
+
+/// True when an X11 toolchain (clipboard + keystroke) is available, i.e. the
+/// session exposes DISPLAY and XWayland tooling is installed.
+fn x11_tools_available() -> bool {
+    std::env::var("DISPLAY")
+        .map(|d| !d.is_empty())
+        .unwrap_or(false)
+        && (require_tool("xsel") || require_tool("xclip"))
+        && require_tool("xdotool")
 }
 
 fn inject_text_x11(text: &str) -> Result<()> {
@@ -790,22 +931,96 @@ fn inject_text_x11(text: &str) -> Result<()> {
     }
 
     let shortcut = if is_term { "ctrl+shift+v" } else { "ctrl+v" };
-    Command::new("xdotool")
-        .args(["key", shortcut])
-        .output()
-        .with_context(|| format!("xdotool key {} failed. Is DISPLAY set correctly?", shortcut))?;
-
-    Ok(())
+    let mut cmd = Command::new("xdotool");
+    cmd.args(["key", shortcut]);
+    match run_limited(&mut cmd, CLIP_CMD_TIMEOUT) {
+        CommandOutcome::Completed(o) if o.status.success() => Ok(()),
+        CommandOutcome::Completed(o) => anyhow::bail!(
+            "xdotool key {} failed ({}). Clipboard is set (manual paste). Is DISPLAY set correctly?",
+            shortcut,
+            o.status
+        ),
+        CommandOutcome::TimedOut => anyhow::bail!(
+            "xdotool key {} timed out. Clipboard is set (manual paste).",
+            shortcut
+        ),
+        CommandOutcome::Failed(e) => anyhow::bail!(
+            "xdotool key {} failed ({}). Clipboard is set (manual paste).",
+            shortcut,
+            e
+        ),
+    }
 }
 
 fn inject_text_wayland(text: &str) -> Result<()> {
-    // 1. Set clipboard (wl-copy)
-    set_clipboard_wl_copy(text)
-        .context("Failed to set Wayland clipboard. Install: sudo apt install wl-clipboard")?;
+    let compositor = detect_wayland_compositor();
 
-    std::thread::sleep(Duration::from_millis(100));
+    // 0. Identify the focused window (best effort) so the paste shortcut and
+    //    injection backend match the app. Authoritative on Sway/Hyprland via
+    //    compositor IPC; elsewhere we fall back to the compositor-aware key
+    //    sequence instead of guessing from possibly-stale X11 focus.
+    let target = detect_focus_target(compositor);
+    match &target {
+        Some(t) => write_log(&format!(
+            "Focus: {} (id={:?}, {})",
+            match t.class {
+                FocusClass::Terminal => "terminal",
+                FocusClass::Browser => "browser",
+                FocusClass::Ide => "IDE",
+                FocusClass::Generic => "generic",
+            },
+            t.id,
+            if t.xwayland {
+                "XWayland"
+            } else {
+                "native Wayland"
+            }
+        )),
+        None => write_log("Focus detection unavailable — using generic paste sequence"),
+    }
 
-    // 2. If wtype not available, clipboard-only mode is fine
+    // XWayland windows are injected through the X11 path: XTEST events reach
+    // the client directly and the X11 clipboard is used, skipping the
+    // Wayland↔X clipboard bridge that is a common source of paste lag.
+    if target.as_ref().is_some_and(|t| t.xwayland) {
+        if x11_tools_available() {
+            write_log("Focused window is XWayland — injecting via X11 path");
+            return inject_text_x11(text);
+        }
+        write_log("Focused window is XWayland but X11 tools are missing — using Wayland path");
+    }
+
+    // 1. Set the Wayland clipboard and verify the data offer is live before
+    //    sending the paste key. wl-copy daemonizes asynchronously; pasting
+    //    before the offer is registered is the classic "paste did nothing"
+    //    race in browsers.
+    if !require_tool("wl-copy") {
+        if x11_tools_available() {
+            write_log("wl-copy missing — using X11 injection fallback");
+            return inject_text_x11(text);
+        }
+        anyhow::bail!("wl-copy not found. Install: sudo apt install wl-clipboard");
+    }
+    let t0 = Instant::now();
+    set_clipboard_wl_copy_verified(text)?;
+    write_log(&format!(
+        "Clipboard set and verified in {} ms",
+        t0.elapsed().as_millis()
+    ));
+
+    // Insurance: an XWayland client we could not detect (KDE/GNOME without
+    // compositor IPC) reads the X11 CLIPBOARD. Seed it too when the target is
+    // unknown, so the compositor's slow bridge never has to proxy the data.
+    maybe_set_x_clipboard(text, target.as_ref());
+
+    // 2. Skip keyboard paste for IDEs (shortcut conflicts); the clipboard is
+    //    already set for a manual paste.
+    if target.as_ref().is_some_and(|t| t.class == FocusClass::Ide) || is_vscode_running() {
+        write_log("IDE focused — skipping keyboard paste (clipboard set). Manual paste: Ctrl+V / Ctrl+Shift+V");
+        return Ok(());
+    }
+
+    // 3. wtype must exist to send the paste key.
     if !require_tool("wtype") {
         write_log(&format!(
             "wtype not found. Copied {} chars to clipboard (manual paste: Ctrl+Shift+V / Ctrl+V). Install: sudo apt install wtype",
@@ -814,105 +1029,200 @@ fn inject_text_wayland(text: &str) -> Result<()> {
         return Ok(());
     }
 
-    // 3. Skip wtype if VS Code is running (shortcut conflicts on Wayland)
-    if is_vscode_running() {
-        write_log("VS Code running — skipping wtype paste (clipboard set). Manual paste: Ctrl+V / Ctrl+Shift+V");
-        return Ok(());
-    }
-
-    // 4. Determine paste shortcuts based on compositor
-    let compositor = detect_wayland_compositor();
-
-    write_log(&format!(
-        "Pasting {} chars via wtype on {:?}",
-        text.len(),
-        compositor
-    ));
-
-    // Key combinations to try, ordered by likelihood for the detected compositor.
-    // Terminal paste   = Ctrl+Shift+V
-    // GUI app paste    = Ctrl+V
-    let paste_keys = paste_keys_for(compositor);
-
-    let mut any_success = false;
-    for keys in paste_keys {
-        let status = Command::new("wtype")
-            .args(*keys)
-            .output()
-            .context("wtype failed to execute")?;
-
-        if status.status.success() {
-            std::thread::sleep(Duration::from_millis(50));
-            any_success = true;
-            break;
-        } else {
-            let stderr = String::from_utf8_lossy(&status.stderr);
-            write_log(&format!("wtype attempt failed: {}", stderr.trim()));
-        }
-    }
-
-    if !any_success {
+    // 4. Send the paste key(s). Known targets get exactly one shortcut
+    //    (terminals: Ctrl+Shift+V, browsers: Ctrl+V) — the wrong first key in
+    //    a chain is what causes double pastes or stray `^V` in terminals.
+    if !paste_with_wtype(target.as_ref(), compositor) {
         write_log("wtype paste failed — clipboard is set (manual paste: Ctrl+Shift+V / Ctrl+V)");
     }
 
     Ok(())
 }
 
-fn set_clipboard_wl_copy(text: &str) -> Result<()> {
-    let mut child = Command::new("wl-copy")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "wl-copy not found: {}. Install: sudo apt install wl-clipboard",
-                e
-            )
-        })?;
+/// Paste via wtype, choosing the key sequence from the focused app.
+/// Returns true if at least one attempt was delivered (exit 0).
+fn paste_with_wtype(target: Option<&FocusTarget>, compositor: WaylandCompositor) -> bool {
+    let keys_list = paste_keys_for_target(target, compositor);
+    let mut last_error = String::new();
 
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(text.as_bytes())
-            .context("Failed to write to wl-copy stdin")?;
+    for keys in keys_list {
+        write_log(&format!("wtype paste attempt: {:?}", keys));
+        let mut cmd = Command::new("wtype");
+        cmd.args(*keys);
+        match run_limited_capture(&mut cmd, WTYPE_TIMEOUT) {
+            CommandOutcome::Completed(o) if o.status.success() => {
+                write_log("wtype paste delivered");
+                return true;
+            }
+            CommandOutcome::Completed(o) => {
+                last_error = String::from_utf8_lossy(&o.stderr).trim().to_string();
+                write_log(&format!("wtype attempt failed: {}", last_error));
+
+                // Retry the same key once: a non-zero exit means the key was
+                // not delivered (e.g. the compositor was busy), so repeating
+                // it cannot double-paste.
+                thread::sleep(Duration::from_millis(120));
+                let mut retry = Command::new("wtype");
+                retry.args(*keys);
+                match run_limited_capture(&mut retry, WTYPE_TIMEOUT) {
+                    CommandOutcome::Completed(o2) if o2.status.success() => {
+                        write_log("wtype paste delivered on retry");
+                        return true;
+                    }
+                    CommandOutcome::Completed(o2) => {
+                        last_error = String::from_utf8_lossy(&o2.stderr).trim().to_string();
+                    }
+                    CommandOutcome::TimedOut => {
+                        last_error = format!("timed out after {} ms", WTYPE_TIMEOUT.as_millis());
+                    }
+                    CommandOutcome::Failed(e) => last_error = e,
+                }
+            }
+            CommandOutcome::TimedOut => {
+                // No retry on timeout: a wedged virtual keyboard will likely
+                // wedge again, and we must bound total injection time.
+                last_error = format!("timed out after {} ms", WTYPE_TIMEOUT.as_millis());
+                write_log(&format!("wtype timed out: {}", last_error));
+            }
+            CommandOutcome::Failed(e) => {
+                last_error = e;
+                write_log(&format!("wtype error: {}", last_error));
+            }
+        }
     }
 
-    child.wait().context("wl-copy failed")?;
+    write_log(&format!("All wtype paste attempts failed ({})", last_error));
+    false
+}
+
+fn set_clipboard_wl_copy(text: &str) -> Result<()> {
+    let mut cmd = Command::new("wl-copy");
+    match run_limited_with_stdin(&mut cmd, CLIP_CMD_TIMEOUT, Some(text.as_bytes()), false) {
+        CommandOutcome::Completed(o) if o.status.success() => Ok(()),
+        CommandOutcome::Completed(o) => Err(anyhow::anyhow!("wl-copy exited with {}", o.status)),
+        CommandOutcome::TimedOut => Err(anyhow::anyhow!(
+            "wl-copy timed out after {} ms",
+            CLIP_CMD_TIMEOUT.as_millis()
+        )),
+        CommandOutcome::Failed(e) => Err(anyhow::anyhow!(
+            "wl-copy not found: {}. Install: sudo apt install wl-clipboard",
+            e
+        )),
+    }
+}
+
+/// Set the Wayland clipboard and confirm the data offer is live by reading
+/// it back with wl-paste, retrying once. Pasting before the offer is
+/// registered is why a paste key sometimes lands in a browser with nothing
+/// to paste.
+fn set_clipboard_wl_copy_verified(text: &str) -> Result<()> {
+    let mut verified = false;
+    for attempt in 1..=2 {
+        set_clipboard_wl_copy(text)?;
+        if clipboard_contains(text) {
+            verified = true;
+            break;
+        }
+        write_log(&format!(
+            "wl-copy attempt {} not visible to wl-paste — retrying",
+            attempt
+        ));
+    }
+    if !verified {
+        // Last chance: set it once more and proceed. The offer may still
+        // become visible to the target app even if our read-back raced.
+        set_clipboard_wl_copy(text)?;
+        write_log("WARNING: clipboard not verified after retries — pasting anyway");
+    }
     Ok(())
+}
+
+/// Read the Wayland clipboard back and compare it to what we set.
+fn clipboard_contains(expected: &str) -> bool {
+    let mut cmd = Command::new("wl-paste");
+    match run_limited_capture(&mut cmd, VERIFY_TIMEOUT) {
+        CommandOutcome::Completed(o) if o.status.success() => {
+            clipboard_matches(expected, String::from_utf8_lossy(&o.stdout).trim())
+        }
+        _ => false,
+    }
+}
+
+/// Compare the text we set on the clipboard with what we read back,
+/// tolerating a trailing newline added or stripped by the clipboard.
+fn clipboard_matches(expected: &str, got: &str) -> bool {
+    expected.trim_end_matches('\n') == got.trim_end_matches('\n')
+}
+
+/// Seed the X11 CLIPBOARD selection in addition to Wayland's. XWayland apps
+/// (e.g. Chrome under XWayland) read the X selection; keeping both in sync
+/// avoids relying on the compositor's Wayland↔X bridge. Only done when the
+/// target is unknown, when the window could plausibly be XWayland.
+fn maybe_set_x_clipboard(text: &str, target: Option<&FocusTarget>) {
+    let worth_it = match target.map(|t| t.class) {
+        None | Some(FocusClass::Generic) => true,
+        Some(_) => false,
+    };
+    if !worth_it {
+        return;
+    }
+    if std::env::var("DISPLAY")
+        .map(|d| d.is_empty())
+        .unwrap_or(true)
+    {
+        return;
+    }
+    let mut used = false;
+    if require_tool("xsel") {
+        used = set_clipboard_xsel(text).is_ok();
+    }
+    if !used && require_tool("xclip") {
+        used = set_clipboard_xclip(text).is_ok();
+    }
+    if used {
+        write_log("Seeded X11 clipboard for XWayland compatibility");
+    }
 }
 
 fn set_clipboard_xsel(text: &str) -> Result<()> {
-    let mut child = Command::new("xsel")
-        .args(["--clipboard", "--input"])
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| anyhow::anyhow!("xsel not found: {}. Install: sudo apt install xsel", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(text.as_bytes())
-            .context("Failed to write to xsel stdin")?;
+    let mut cmd = Command::new("xsel");
+    cmd.args(["--clipboard", "--input"]);
+    match run_limited_with_stdin(&mut cmd, CLIP_CMD_TIMEOUT, Some(text.as_bytes()), false) {
+        CommandOutcome::Completed(o) if o.status.success() => Ok(()),
+        CommandOutcome::Completed(o) => Err(anyhow::anyhow!(
+            "xsel exited with {}. Install: sudo apt install xsel",
+            o.status
+        )),
+        CommandOutcome::TimedOut => Err(anyhow::anyhow!(
+            "xsel timed out after {} ms",
+            CLIP_CMD_TIMEOUT.as_millis()
+        )),
+        CommandOutcome::Failed(e) => Err(anyhow::anyhow!(
+            "xsel not found: {}. Install: sudo apt install xsel",
+            e
+        )),
     }
-
-    child.wait().context("xsel (clipboard) failed")?;
-    Ok(())
 }
 
 fn set_clipboard_xclip(text: &str) -> Result<()> {
-    let mut child = Command::new("xclip")
-        .args(["-selection", "clipboard"])
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| anyhow::anyhow!("xclip not found: {}. Install: sudo apt install xclip", e))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(text.as_bytes())
-            .context("Failed to write to xclip stdin")?;
+    let mut cmd = Command::new("xclip");
+    cmd.args(["-selection", "clipboard"]);
+    match run_limited_with_stdin(&mut cmd, CLIP_CMD_TIMEOUT, Some(text.as_bytes()), false) {
+        CommandOutcome::Completed(o) if o.status.success() => Ok(()),
+        CommandOutcome::Completed(o) => Err(anyhow::anyhow!(
+            "xclip exited with {}. Install: sudo apt install xclip",
+            o.status
+        )),
+        CommandOutcome::TimedOut => Err(anyhow::anyhow!(
+            "xclip timed out after {} ms",
+            CLIP_CMD_TIMEOUT.as_millis()
+        )),
+        CommandOutcome::Failed(e) => Err(anyhow::anyhow!(
+            "xclip not found: {}. Install: sudo apt install xclip",
+            e
+        )),
     }
-
-    child.wait().context("xclip (clipboard) failed")?;
-    Ok(())
 }
-
 // ── Window classification helpers ──────────────────────────────
 
 /// Extract the class from an `xprop -id <win> WM_CLASS` output line,
@@ -982,6 +1292,203 @@ fn paste_keys_for(compositor: WaylandCompositor) -> &'static [&'static [&'static
             &["-M", "ctrl", "-k", "v", "-m", "ctrl"],
         ],
     }
+}
+
+/// Paste key sequences to use, ordered by likelihood, for the focused app.
+/// Known classes get exactly one sequence: the wrong first key in a fallback
+/// chain is what causes double pastes (browsers accept Ctrl+Shift+V too) and
+/// stray literal characters (Ctrl+V is "quoted insert" in many terminals).
+fn paste_keys_for_target(
+    target: Option<&FocusTarget>,
+    compositor: WaylandCompositor,
+) -> &'static [&'static [&'static str]] {
+    const TERM_KEYS: &[&[&str]] = &[&[
+        "-M", "ctrl", "-M", "shift", "-k", "v", "-m", "ctrl", "-m", "shift",
+    ]];
+    const GUI_KEYS: &[&[&str]] = &[&["-M", "ctrl", "-k", "v", "-m", "ctrl"]];
+    const NONE: &[&[&str]] = &[];
+
+    match target.map(|t| t.class) {
+        Some(FocusClass::Terminal) => TERM_KEYS,
+        Some(FocusClass::Browser) => GUI_KEYS,
+        Some(FocusClass::Ide) => NONE,
+        Some(FocusClass::Generic) | None => paste_keys_for(compositor),
+    }
+}
+
+// ── Focused-window detection (Wayland paste targeting) ────────
+
+/// Broad app classes that dictate which paste shortcut to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FocusClass {
+    Terminal,
+    Browser,
+    Ide,
+    Generic,
+}
+
+/// A detected focused window.
+#[derive(Debug, Clone, PartialEq)]
+struct FocusTarget {
+    class: FocusClass,
+    /// True when the window is an XWayland (X11) client.
+    xwayland: bool,
+    /// Raw app identifier (app_id or WM_CLASS), when known.
+    id: Option<String>,
+}
+
+const BROWSER_CLASSES: &[&str] = &[
+    "google-chrome",
+    "chrome",
+    "chromium",
+    "chromium-browser",
+    "firefox",
+    "firefox-esr",
+    "librewolf",
+    "waterfox",
+    "brave-browser",
+    "brave",
+    "microsoft-edge",
+    "msedge",
+    "edge",
+    "vivaldi",
+    "opera",
+    "epiphany",
+    "zen",
+    "thorium-browser",
+    "floorp",
+    "mullvad-browser",
+    "tor-browser",
+];
+
+const IDE_CLASSES: &[&str] = &[
+    "code",
+    "code-oss",
+    "vscodium",
+    "codium",
+    "cursor",
+    "zed",
+    "sublime_text",
+    "sublimetext",
+    "idea",
+    "pycharm",
+    "webstorm",
+    "goland",
+    "rustrover",
+    "clion",
+    "phpstorm",
+    "datagrip",
+    "rider",
+    "rubymine",
+    "fleet",
+    "android-studio",
+    "studio64",
+];
+
+/// Map an app identifier (sway `app_id`, Hyprland `class`, or X11 `WM_CLASS`)
+/// to the class that determines the paste shortcut.
+fn classify_focus(id: &str) -> FocusClass {
+    let id = id.trim().to_lowercase();
+    if id.is_empty() {
+        return FocusClass::Generic;
+    }
+    if is_known_terminal(&id) {
+        return FocusClass::Terminal;
+    }
+    if BROWSER_CLASSES.contains(&id.as_str()) {
+        return FocusClass::Browser;
+    }
+    if IDE_CLASSES.contains(&id.as_str()) {
+        return FocusClass::Ide;
+    }
+    FocusClass::Generic
+}
+
+/// Best-effort detection of the focused window for the paste step.
+/// Authoritative on Sway and Hyprland (compositor IPC); None elsewhere so
+/// injection degrades to the generic compositor-aware key sequence instead
+/// of guessing from possibly-stale X11 focus.
+fn detect_focus_target(compositor: WaylandCompositor) -> Option<FocusTarget> {
+    match compositor {
+        WaylandCompositor::Sway => focused_window_from_sway(),
+        WaylandCompositor::Hyprland => focused_window_from_hypr(),
+        WaylandCompositor::Kde | WaylandCompositor::Gnome | WaylandCompositor::Other => None,
+    }
+}
+
+/// Query the focused node from sway's tree via `swaymsg -t get_tree`.
+fn focused_window_from_sway() -> Option<FocusTarget> {
+    let mut cmd = Command::new("swaymsg");
+    cmd.args(["-t", "get_tree"]);
+    let stdout = match run_limited_capture(&mut cmd, IPC_TIMEOUT) {
+        CommandOutcome::Completed(o) if o.status.success() => o.stdout,
+        _ => return None,
+    };
+    let tree: serde_json::Value = serde_json::from_slice(&stdout).ok()?;
+    let node = find_focused_node(&tree)?;
+    focus_target_from_node(node)
+}
+
+/// Walk a sway `get_tree` JSON value to the node with `focused: true`.
+fn find_focused_node(v: &serde_json::Value) -> Option<&serde_json::Value> {
+    if v.get("focused").and_then(|b| b.as_bool()) == Some(true) {
+        return Some(v);
+    }
+    if let Some(children) = v.get("nodes").and_then(|n| n.as_array()) {
+        for child in children {
+            if let Some(f) = find_focused_node(child) {
+                return Some(f);
+            }
+        }
+    }
+    if let Some(children) = v.get("floating_nodes").and_then(|n| n.as_array()) {
+        for child in children {
+            if let Some(f) = find_focused_node(child) {
+                return Some(f);
+            }
+        }
+    }
+    None
+}
+
+/// Extract the app id and XWayland-ness from a sway tree node.
+fn focus_target_from_node(node: &serde_json::Value) -> Option<FocusTarget> {
+    // Native Wayland clients expose `app_id`; XWayland clients expose
+    // `window_properties.class` and no `app_id`.
+    let app_id = node
+        .get("app_id")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let window_properties = node.get("window_properties");
+    let win_class = window_properties
+        .and_then(|p| p.get("class"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let id = app_id.or(win_class).filter(|id| !id.is_empty());
+    Some(FocusTarget {
+        class: classify_focus(id.as_deref().unwrap_or("")),
+        xwayland: window_properties.is_some(),
+        id,
+    })
+}
+
+/// Query Hyprland's focused window via `hyprctl activewindow -j`.
+fn focused_window_from_hypr() -> Option<FocusTarget> {
+    let mut cmd = Command::new("hyprctl");
+    cmd.args(["activewindow", "-j"]);
+    let stdout = match run_limited_capture(&mut cmd, IPC_TIMEOUT) {
+        CommandOutcome::Completed(o) if o.status.success() => o.stdout,
+        _ => return None,
+    };
+    let v: serde_json::Value = serde_json::from_slice(&stdout).ok()?;
+    let class = v.get("class").and_then(|c| c.as_str()).map(str::to_string);
+    let xwayland = v.get("xwayland").and_then(|x| x.as_bool()).unwrap_or(false);
+    let id = class.filter(|c| !c.is_empty());
+    Some(FocusTarget {
+        class: classify_focus(id.as_deref().unwrap_or("")),
+        xwayland,
+        id,
+    })
 }
 
 /// Groq has a ~25 MB upload limit; reject anything approaching it early.
@@ -1243,5 +1750,227 @@ mod tests {
         assert_eq!(detect_wayland_compositor(), WaylandCompositor::Gnome);
         std::env::set_var("XDG_CURRENT_DESKTOP", "unknown");
         assert_eq!(detect_wayland_compositor(), WaylandCompositor::Other);
+    }
+
+    #[test]
+    fn command_timeout_kills_hung_child() {
+        let outcome = run_limited(Command::new("sleep").arg("5"), Duration::from_millis(150));
+        assert!(matches!(outcome, CommandOutcome::TimedOut));
+    }
+
+    #[test]
+    fn command_capture_reads_stdout() {
+        let outcome = run_limited_capture(
+            Command::new("sh").args(["-c", "printf 'hello world'"]),
+            Duration::from_secs(2),
+        );
+        match outcome {
+            CommandOutcome::Completed(o) => {
+                assert!(o.status.success());
+                assert_eq!(o.stdout, b"hello world".to_vec());
+            }
+            other => panic!("expected Completed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn command_stdin_payload_is_written() {
+        let outcome = run_limited_with_stdin(
+            Command::new("sh").args(["-c", "cat"]),
+            Duration::from_secs(2),
+            Some(b"payload".as_slice()),
+            true,
+        );
+        match outcome {
+            CommandOutcome::Completed(o) => {
+                assert!(o.status.success());
+                assert_eq!(o.stdout, b"payload".to_vec());
+            }
+            other => panic!("expected Completed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn focus_classification() {
+        assert_eq!(classify_focus("google-chrome"), FocusClass::Browser);
+        assert_eq!(classify_focus("chromium"), FocusClass::Browser);
+        assert_eq!(classify_focus("firefox"), FocusClass::Browser);
+        assert_eq!(classify_focus("Alacritty"), FocusClass::Terminal);
+        assert_eq!(classify_focus("alacritty"), FocusClass::Terminal);
+        assert_eq!(classify_focus("foot"), FocusClass::Terminal);
+        assert_eq!(classify_focus("code"), FocusClass::Ide);
+        assert_eq!(classify_focus("pycharm"), FocusClass::Ide);
+        assert_eq!(classify_focus("gimp"), FocusClass::Generic);
+        assert_eq!(classify_focus(""), FocusClass::Generic);
+    }
+
+    #[test]
+    fn sway_focus_parsing() {
+        // Native Wayland window: app_id present, no window_properties.
+        let tree: serde_json::Value = serde_json::from_str(
+            r#"{
+                "nodes": [{
+                    "nodes": [{
+                        "focused": true,
+                        "app_id": "google-chrome",
+                        "name": "ChatGPT - Google Chrome"
+                    }]
+                }]
+            }"#,
+        )
+        .unwrap();
+        let node = find_focused_node(&tree).unwrap();
+        let target = focus_target_from_node(node).unwrap();
+        assert_eq!(target.class, FocusClass::Browser);
+        assert!(!target.xwayland);
+        assert_eq!(target.id.as_deref(), Some("google-chrome"));
+
+        // XWayland window: window_properties instead of app_id.
+        let tree: serde_json::Value = serde_json::from_str(
+            r#"{
+                "nodes": [{
+                    "focused": true,
+                    "window_properties": { "class": "alacritty", "instance": "alacritty" }
+                }]
+            }"#,
+        )
+        .unwrap();
+        let target = focus_target_from_node(find_focused_node(&tree).unwrap()).unwrap();
+        assert_eq!(target.class, FocusClass::Terminal);
+        assert!(target.xwayland);
+        assert_eq!(target.id.as_deref(), Some("alacritty"));
+
+        // No focused node at all.
+        let tree: serde_json::Value = serde_json::from_str(r#"{"nodes": []}"#).unwrap();
+        assert!(find_focused_node(&tree).is_none());
+    }
+
+    #[test]
+    fn paste_keys_for_known_targets() {
+        let term = FocusTarget {
+            class: FocusClass::Terminal,
+            xwayland: false,
+            id: Some("alacritty".to_string()),
+        };
+        let keys = paste_keys_for_target(Some(&term), WaylandCompositor::Sway);
+        assert_eq!(keys.len(), 1);
+        assert!(keys[0].contains(&"shift"));
+
+        let browser = FocusTarget {
+            class: FocusClass::Browser,
+            xwayland: false,
+            id: Some("google-chrome".to_string()),
+        };
+        let keys = paste_keys_for_target(Some(&browser), WaylandCompositor::Sway);
+        assert_eq!(keys.len(), 1);
+        assert!(!keys[0].contains(&"shift"));
+
+        let ide = FocusTarget {
+            class: FocusClass::Ide,
+            xwayland: false,
+            id: Some("code".to_string()),
+        };
+        assert!(paste_keys_for_target(Some(&ide), WaylandCompositor::Sway).is_empty());
+
+        // Unknown target keeps the compositor-aware fallback chain.
+        assert_eq!(
+            paste_keys_for_target(None, WaylandCompositor::Sway).len(),
+            2
+        );
+        assert_eq!(
+            paste_keys_for_target(None, WaylandCompositor::Gnome).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn clipboard_match_comparison() {
+        assert!(clipboard_matches("hello", "hello"));
+        assert!(clipboard_matches("hello", "hello\n"));
+        assert!(clipboard_matches("hello\n", "hello"));
+        assert!(!clipboard_matches("hello", "hallo"));
+        assert!(!clipboard_matches("hello", ""));
+    }
+
+    /// Live end-to-end smoke test for Wayland text injection.
+    ///
+    /// Deliberately excluded from normal runs (`#[ignore]`): it pastes into
+    /// the currently focused window and only does so when every guard holds.
+    ///
+    /// Two supported targets, pick one and focus it:
+    ///   1. Native Wayland terminal (foot): pastes text into a file.
+    ///      swaymsg 'exec foot sh -c "cat > /tmp/voxtype-paste-smoke.txt"'
+    ///   2. XWayland event tester (xev): verifies the X11 fallback path.
+    ///      swaymsg 'exec sh -c "xev > /tmp/xev.log 2>&1"'
+    ///
+    /// Then run:
+    ///   VOXTYPE_LIVE_SMOKE=1 cargo test -- --ignored live_wayland_paste_smoke --nocapture
+    ///
+    /// The test pastes ONLY when the focused window is a `foot` terminal or
+    /// an XWayland window, so it can never type into an unrelated app.
+    #[test]
+    #[ignore]
+    fn live_wayland_paste_smoke() {
+        use std::io::Read as _;
+
+        if std::env::var("VOXTYPE_LIVE_SMOKE").as_deref() != Ok("1") {
+            eprintln!("skipping: VOXTYPE_LIVE_SMOKE=1 not set");
+            return;
+        }
+        if detect_env() != DesktopEnv::Wayland
+            || detect_wayland_compositor() != WaylandCompositor::Sway
+        {
+            panic!("live smoke test requires Sway on Wayland");
+        }
+
+        let marker = format!("voxtype smoke test {}", std::process::id());
+        let target =
+            detect_focus_target(WaylandCompositor::Sway).expect("no focused window detected");
+        let is_foot = target.id.as_deref() == Some("foot");
+        let is_xwayland = target.xwayland;
+        assert!(
+            is_foot || is_xwayland,
+            "refusing to paste: focused window is {:?} (expected a scratch foot terminal or an XWayland window)",
+            target
+        );
+
+        inject_text_wayland(&marker).expect("inject_text_wayland failed");
+
+        if is_foot {
+            // The scratch terminal runs `cat > /tmp/voxtype-paste-smoke.txt`;
+            // the pasted text must land there.
+            let path = "/tmp/voxtype-paste-smoke.txt";
+            for _ in 0..50 {
+                if let Ok(mut f) = std::fs::File::open(path) {
+                    let mut s = String::new();
+                    let _ = f.read_to_string(&mut s);
+                    if s.trim() == marker {
+                        let _ = std::fs::remove_file(path);
+                        return;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            let got = std::fs::read_to_string(path).unwrap_or_else(|_| "<unreadable>".into());
+            panic!("paste did not land: file contains {:?}", got);
+        } else {
+            // XWayland target: the injector routes through the X11 path
+            // (xdotool Ctrl+V). The focused xev window logs every KeyPress;
+            // the paste shortcut must appear there.
+            let path = "/tmp/xev.log";
+            for _ in 0..50 {
+                if let Ok(s) = std::fs::read_to_string(path) {
+                    if s.contains("keysym")
+                        && s.lines().filter(|l| l.contains("KeyPress")).count() > 0
+                    {
+                        let _ = std::fs::remove_file(path);
+                        return;
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            let got = std::fs::read_to_string(path).unwrap_or_else(|_| "<unreadable>".into());
+            panic!("paste shortcut did not reach xev; log contains {:?}", got);
+        }
     }
 }
