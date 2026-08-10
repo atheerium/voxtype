@@ -326,6 +326,18 @@ reliably. For native Wayland apps on an affected compositor, either upgrade
 `sway`, run the app under XWayland (e.g. Chrome with `--ozone-platform=x11`),
 or use `ydotool`.
 
+**I use native-Wayland Chrome — is there any working injection path on Sway?**
+One verified mechanism is the input-method protocol (`zwp_input_method_v2`):
+voxtype can commit the dictation text directly into the focused field via
+`commit_string`, bypassing both the clipboard and key injection. On Sway 1.9
+this path was verified working end-to-end for GTK apps (text inserted into an
+entry field), and Chrome enables text-input-v3 (the IM activates), so
+dictation via this path is worth testing on your machine. Two caveats:
+terminals (foot, alacritty) activate the IM but do not render `commit_string`,
+so they still rely on the paste shortcut; and Chromium's Wayland IME support
+has known compositor-specific quirks. This backend is not yet integrated into
+voxtype — it is a candidate for a future opt-in.
+
 ## Roadmap
 
 - Voice editing commands (select, delete, replace) like Wispr Flow
