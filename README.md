@@ -75,7 +75,8 @@ vendor lock-in. The whole binary is ~2.4 MB and the source is MIT-licensed.
 - 🖥️ **X11 + Wayland support** — auto-detects compositor (Sway, Hyprland, KDE, GNOME) and chooses correct paste shortcuts
 - 📋 **Clipboard-first design** — text is always copied, so even if keyboard paste misses, manual paste works
 - 🧠 **Modern Whisper models** — `whisper-large-v3-turbo` by default, configurable (any Groq model)
-- 🔑 **Bring your own key** — Groq API key from env var or `config.toml`
+- 🔑 **Bring your own key** — Groq, Deepgram, or Mistral API keys from env var or `config.toml`
+- 🔄 **Automatic provider fallback** — tries Deepgram → Mistral → Groq, so rate limits on one provider don't break dictation
 - 🪶 **~2.4 MB native binary** — no runtime, no Electron, `panic=abort`, fully stripped
 - 🛡️ **Robust daemon** — crash recovery, stale-process cleanup, single-instance guard, graceful degradation when tools are missing
 - 🐧 **Distro-agnostic** — installer supports apt, dnf, pacman, zypper, apk, emerge
@@ -85,12 +86,16 @@ vendor lock-in. The whole binary is ~2.4 MB and the source is MIT-licensed.
 ```
 Ctrl+Space → voxtype CLI → SIGUSR1 → voxtype daemon (background)
                                       ├── ffmpeg records mic → /tmp/voxtype.mp3
-                                      └── Ctrl+Space again → Groq API → clipboard → auto-paste
+                                      └── Ctrl+Space again → Speech-to-text → clipboard → auto-paste
+                                      Providers (fallback chain):
+                                        1. Deepgram (nova-3)
+                                        2. Mistral Voxtral (voxtral-mini-latest)
+                                        3. Groq (whisper-large-v3-turbo)
 ```
 
 1. You press <kbd>Ctrl</kbd>+<kbd>Space</kbd>. The CLI sends a signal to the background daemon.
 2. The daemon records your microphone with **ffmpeg** (16 kHz mono, ~64 kbps) into a temp file.
-3. You press <kbd>Ctrl</kbd>+<kbd>Space</kbd> again. The daemon stops recording and uploads the audio to **Groq's Whisper API**.
+3. You press <kbd>Ctrl</kbd>+<kbd>Space</kbd> again. The daemon stops recording and sends the audio to a speech-to-text provider. By default voxtype tries **Deepgram**, then **Mistral** (Voxtral), then **Groq** (Whisper) — whichever key(s) you have configured. The first successful response wins, so a rate limit or outage on one provider automatically falls through to the next.
 4. The transcribed text is copied to your clipboard and **pasted into the focused app** automatically.
 5. On Wayland, voxtype detects the focused window (Sway/Hyprland IPC) and picks the right paste shortcut — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> in terminals, <kbd>Ctrl</kbd>+<kbd>V</kbd> in browsers — verifies the clipboard is live before pasting, and falls back to a compositor-aware key sequence. XWayland windows are injected through the X11 path for speed. Every step is timeout-bounded, so a wedged tool can never block dictation. On X11, `xdotool` detects terminal vs GUI apps.
 
@@ -115,7 +120,11 @@ loop: *press, speak, done* — everywhere, for free.
 
 - **Linux** with an X11 or Wayland session (works on Sway, Hyprland, KDE, GNOME, XFCE, i3, …)
 - **ffmpeg** for audio recording (installed automatically by the installer)
-- **A Groq API key** — free tier at [console.groq.com](https://console.groq.com)
+- **A speech-to-text API key** — one of:
+  - **Deepgram** — free tier at [deepgram.com](https://deepgram.com) (recommended, tried first)
+  - **Mistral** — API key from [console.mistral.ai](https://console.mistral.ai) (Voxtral model)
+  - **Groq** — free tier at [console.groq.com](https://console.groq.com)
+  - At least one key is required. Add any combination to `config.toml` or the corresponding env var (`DEEPGRAM_API_KEY`, `MISTRAL_API_KEY`, `GROQ_API_KEY`).
 - Clipboard tools: X11 needs `xsel`/`xclip` + `xdotool`; Wayland needs `wl-clipboard` + `wtype` (all auto-installed)
 - Optional: `notify-send` for desktop notifications, `pactl` for audio detection
 
@@ -168,10 +177,11 @@ fastest path.
 ## Quick start
 
 1. **Install** (see above).
-2. **Set your API key** if you didn't during install:
+2. **Set your API key(s)** if you didn't during install (at least one is required). For example, with Deepgram:
    ```bash
-   echo 'export GROQ_API_KEY="gsk_..."' >> ~/.bashrc
+   echo 'export DEEPGRAM_API_KEY="dg_..."' >> ~/.bashrc
    ```
+   You can also add `groq_api_key`, `deepgram_api_key`, and `mistral_api_key` to `~/.config/voxtype/config.toml`.
 3. **Press <kbd>Ctrl</kbd>+<kbd>Space</kbd>**, speak, press <kbd>Ctrl</kbd>+<kbd>Space</kbd> again. Done.
 
 Text is pasted into the focused app automatically, and is always on the
@@ -182,16 +192,25 @@ clipboard as a fallback (<kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>Ctrl</kbd>+<kbd>Shi
 Configuration lives in `~/.config/voxtype/config.toml`:
 
 ```toml
-groq_api_key = "gsk_..."           # Required: your Groq API key
+# Speech-to-text API keys — at least one is required.
+groq_api_key = "gsk_..."              # Groq (Whisper), fallback provider
+deepgram_api_key = "dg_..."           # Deepgram (nova-3), primary provider
+mistral_api_key = "m_..."             # Mistral (Voxtral), fallback provider
+
 language = "en"                    # ISO-639-1 code, optional
-model = "whisper-large-v3-turbo"   # Any Groq model, optional
+model = "whisper-large-v3-turbo"   # Groq Whisper model (Deepgram/Mistral use their own)
 backend = "auto"                   # "auto", "x11", or "wayland"
 audio_source = "default"           # PulseAudio/PipeWire source, optional
 ```
 
-**API key resolution order:** `config.toml` → `GROQ_API_KEY` env var → shell rc files.
+**API key resolution order** (per provider): `config.toml` → corresponding env
+var (`GROQ_API_KEY` / `DEEPGRAM_API_KEY` / `MISTRAL_API_KEY`) → shell rc files.
 
-Find non-default audio sources with `pactl list sources short`.
+**Fallback chain:** voxtype tries providers in this order — **Deepgram →
+Mistral → Groq** — using whichever keys you have configured. The first
+provider that returns a non-empty transcription wins. If one fails (rate limit,
+network error, 401, etc.), the error is logged and the next provider is tried.
+Configure just one key for basic use, or all three for maximum reliability.
 
 ## Manual hotkey setup (if you skipped the installer's)
 
@@ -290,28 +309,32 @@ Yes — XFCE, GNOME X11, i3, and any X11 window manager. It detects terminal vs
 GUI windows and uses the correct paste shortcut.
 
 **Which speech-to-text model does voxtype use?**
-Groq's `whisper-large-v3-turbo` by default. Any Groq transcription model can be
-set via the `model` config option.
 
-**Do I need a GPU?**
-No. Transcription runs on Groq's servers (their hardware is exceptionally
-fast); your machine only records audio.
+voxtype uses a fallback chain across three providers, trying them in order:
+1. **Deepgram** (`nova-3`) — primary provider
+2. **Mistral** (`voxtral-mini-latest` / Voxtral) — fallback
+3. **Groq** (`whisper-large-v3-turbo` by default) — final fallback, configurable via `model` config option
 
-**Is voxtype really free?**
-Yes. The software is MIT-licensed and costs nothing. The only cost is the
-speech API usage from Groq, which has a generous free tier.
+The first provider that returns a non-empty transcription is used. Configure the
+API keys you want in `config.toml` or as environment variables (`DEEPGRAM_API_KEY`,
+`MISTRAL_API_KEY`, `GROQ_API_KEY`). At least one key is required; all three gives
+maximum reliability against rate limits.
 
 **Is my audio private?**
+
 Your audio is sent only to the transcription provider you configure. There is
 no voxtype cloud, no telemetry, and no analytics.
 
 **Can I use another transcription provider?**
-The code targets the OpenAI-compatible audio API, so swapping providers is a
-small change — contributions welcome.
+
+The code targets the OpenAI-compatible audio API surface, so swapping providers
+is a small change — contributions welcome.
 
 **How fast is transcription?**
-Groq's Whisper endpoint typically returns results in under a couple of seconds
-for short recordings; the whole loop is usually well under 5 seconds.
+
+Deepgram and Groq typically return results in under a couple of seconds for short
+recordings; the whole loop is usually well under 5 seconds. The fallback chain
+adds latency only if a provider fails and voxtype must try the next one.
 
 **Paste is slow or nothing appears in the focused app — what should I check?**
 voxtype bounds every paste step, so injection itself never blocks for more than

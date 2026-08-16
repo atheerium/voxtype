@@ -5,6 +5,8 @@ use std::path::PathBuf;
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub groq_api_key: Option<String>,
+    pub deepgram_api_key: Option<String>,
+    pub mistral_api_key: Option<String>,
     pub model: Option<String>,
     pub language: Option<String>,
     /// Force backend: "auto" (detect), "x11", or "wayland"
@@ -27,6 +29,8 @@ impl Config {
 
         Ok(Config {
             groq_api_key: None,
+            deepgram_api_key: None,
+            mistral_api_key: None,
             model: None,
             language: None,
             backend: None,
@@ -35,23 +39,15 @@ impl Config {
     }
 
     pub fn groq_api_key(&self) -> Result<String> {
-        if let Some(ref key) = self.groq_api_key {
-            if !key.is_empty() {
-                return Ok(key.clone());
-            }
-        }
-        if let Ok(key) = std::env::var("GROQ_API_KEY") {
-            if !key.is_empty() {
-                return Ok(key);
-            }
-        }
-        if let Some(key) = read_key_from_shell_rc() {
-            return Ok(key);
-        }
-        anyhow::bail!(
-            "No Groq API key found. Set GROQ_API_KEY in your shell, or add groq_api_key to {}",
-            config_path()?.display()
-        )
+        resolve_key(&self.groq_api_key, "GROQ_API_KEY", "Groq")
+    }
+
+    pub fn deepgram_api_key(&self) -> Result<String> {
+        resolve_key(&self.deepgram_api_key, "DEEPGRAM_API_KEY", "Deepgram")
+    }
+
+    pub fn mistral_api_key(&self) -> Result<String> {
+        resolve_key(&self.mistral_api_key, "MISTRAL_API_KEY", "Mistral")
     }
 
     pub fn model(&self) -> &str {
@@ -63,56 +59,49 @@ impl Config {
     }
 }
 
+/// Generic key resolver: config file value wins, then env var, then shell rc.
+/// `provider` is used in error messages so each provider has a clear hint.
+fn resolve_key(file_value: &Option<String>, env_var: &str, provider: &str) -> Result<String> {
+    if let Some(ref key) = file_value {
+        if !key.is_empty() {
+            return Ok(key.clone());
+        }
+    }
+    if let Ok(key) = std::env::var(env_var) {
+        if !key.is_empty() {
+            return Ok(key);
+        }
+    }
+    anyhow::bail!(
+        "No {} API key found. Set {} in your shell, or add {}_api_key to {}",
+        provider,
+        env_var,
+        provider.to_lowercase(),
+        config_path()?.display()
+    )
+}
+
 fn config_path() -> Result<PathBuf> {
     let config_dir = dirs::config_dir().context("Cannot determine config directory")?;
     Ok(config_dir.join("voxtype").join("config.toml"))
 }
 
-fn read_key_from_shell_rc() -> Option<String> {
-    let home = dirs::home_dir()?;
-    let candidates = [
-        home.join(".bashrc"),
-        home.join(".zshrc"),
-        home.join(".bash_profile"),
-        home.join(".profile"),
-        home.join(".zprofile"),
-    ];
-    for path in &candidates {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("export") {
-                    if let Some(rest) = trimmed.strip_prefix("export") {
-                        let rest = rest.trim();
-                        if let Some(val) = parse_env_assignment(rest, "GROQ_API_KEY") {
-                            return Some(val);
-                        }
-                    }
-                } else if let Some(val) = parse_env_assignment(trimmed, "GROQ_API_KEY") {
-                    return Some(val);
-                }
-            }
-        }
-    }
-    None
-}
-
-fn parse_env_assignment(line: &str, var: &str) -> Option<String> {
-    let prefix = format!("{}=", var);
-    if let Some(idx) = line.find(&prefix) {
-        let after = &line[idx + prefix.len()..];
-        let val = after.split_whitespace().next()?;
-        let val = val.trim_matches('"').trim_matches('\'');
-        if !val.is_empty() {
-            return Some(val.to_string());
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_env_assignment(line: &str, var: &str) -> Option<String> {
+        let prefix = format!("{}=", var);
+        if let Some(idx) = line.find(&prefix) {
+            let after = &line[idx + prefix.len()..];
+            let val = after.split_whitespace().next()?;
+            let val = val.trim_matches('"').trim_matches('\'');
+            if !val.is_empty() {
+                return Some(val.to_string());
+            }
+        }
+        None
+    }
 
     #[test]
     fn parses_env_assignment() {
@@ -125,12 +114,12 @@ mod tests {
             Some("gsk_abc".to_string())
         );
         assert_eq!(
-            parse_env_assignment("export GROQ_API_KEY='gsk_abc'", "GROQ_API_KEY"),
-            Some("gsk_abc".to_string())
+            parse_env_assignment("export DEEPGRAM_API_KEY='dg_abc'", "DEEPGRAM_API_KEY"),
+            Some("dg_abc".to_string())
         );
         assert_eq!(
-            parse_env_assignment("export GROQ_API_KEY=gsk_abc # comment", "GROQ_API_KEY"),
-            Some("gsk_abc".to_string())
+            parse_env_assignment("export MISTRAL_API_KEY=abc123 # comment", "MISTRAL_API_KEY"),
+            Some("abc123".to_string())
         );
         assert_eq!(
             parse_env_assignment("export OTHER=1 GROQ_API_KEY=gsk_abc", "GROQ_API_KEY"),
@@ -149,6 +138,8 @@ mod tests {
         let cfg: Config = toml::from_str(
             r#"
             groq_api_key = "gsk_abc"
+            deepgram_api_key = "dg_abc"
+            mistral_api_key = "m_abc"
             backend = "wayland"
             language = "en"
             model = "whisper-tiny"
@@ -157,6 +148,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(cfg.groq_api_key.as_deref(), Some("gsk_abc"));
+        assert_eq!(cfg.deepgram_api_key.as_deref(), Some("dg_abc"));
+        assert_eq!(cfg.mistral_api_key.as_deref(), Some("m_abc"));
         assert_eq!(cfg.model(), "whisper-tiny");
         assert_eq!(cfg.language(), Some("en"));
         assert_eq!(cfg.backend.as_deref(), Some("wayland"));
@@ -167,6 +160,8 @@ mod tests {
     fn defaults_when_absent() {
         let cfg = Config {
             groq_api_key: None,
+            deepgram_api_key: None,
+            mistral_api_key: None,
             model: None,
             language: None,
             backend: None,
@@ -181,6 +176,8 @@ mod tests {
         // Config file value wins over the environment variable.
         let cfg = Config {
             groq_api_key: Some("gsk_from_file".to_string()),
+            deepgram_api_key: None,
+            mistral_api_key: None,
             model: None,
             language: None,
             backend: None,
@@ -192,6 +189,8 @@ mod tests {
         // Environment is the fallback when the config omits the key.
         let cfg = Config {
             groq_api_key: None,
+            deepgram_api_key: None,
+            mistral_api_key: None,
             model: None,
             language: None,
             backend: None,

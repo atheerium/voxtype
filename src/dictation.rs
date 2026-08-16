@@ -654,9 +654,17 @@ async fn stop_and_transcribe() -> Result<String> {
     }
 
     let config = Config::load()?;
-    let api_key = config.groq_api_key()?;
 
-    let text = transcribe(&api_key, &config).await?;
+    if audio_too_large(meta.len() as usize) {
+        let _ = fs::remove_file(AUDIO_FILE);
+        anyhow::bail!(
+            "Audio file too large ({} MB). Maximum is ~20 MB.\n\
+             Speak for a shorter duration or reduce bitrate.",
+            meta.len() / 1_000_000
+        );
+    }
+
+    let text = transcribe_with_fallback(&config).await?;
 
     if text.trim().is_empty() {
         let _ = fs::remove_file(AUDIO_FILE);
@@ -676,7 +684,38 @@ async fn stop_and_transcribe() -> Result<String> {
     Ok(text)
 }
 
-async fn transcribe(api_key: &str, config: &Config) -> Result<String> {
+/// Fallback chain: Deepgram → Mistral → Groq.
+/// Each provider is tried in order; the first that returns usable text wins.
+/// Providers whose API key is missing are silently skipped.
+async fn transcribe_with_fallback(config: &Config) -> Result<String> {
+    // Try Deepgram first
+    if let Ok(key) = config.deepgram_api_key() {
+        match transcribe_deepgram(key).await {
+            Ok(text) if !text.trim().is_empty() => return Ok(text.trim().to_string()),
+            Ok(_) => {}
+            Err(e) => {
+                write_log(&format!("Deepgram failed: {}; trying next provider", e));
+            }
+        }
+    }
+
+    // Try Mistral (Voxtral) second
+    if let Ok(key) = config.mistral_api_key() {
+        match transcribe_mistral(&key, config).await {
+            Ok(text) if !text.trim().is_empty() => return Ok(text.trim().to_string()),
+            Ok(_) => {}
+            Err(e) => {
+                write_log(&format!("Mistral failed: {}; trying next provider", e));
+            }
+        }
+    }
+
+    // Fall back to Groq
+    let api_key = config.groq_api_key()?;
+    transcribe_groq(&api_key, config).await
+}
+
+async fn transcribe_deepgram(api_key: String) -> Result<String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -684,14 +723,108 @@ async fn transcribe(api_key: &str, config: &Config) -> Result<String> {
 
     let audio_bytes = fs::read(AUDIO_FILE).context("Failed to read audio file for upload")?;
 
-    // Groq has a ~25MB file limit, check early
-    if audio_too_large(audio_bytes.len()) {
-        anyhow::bail!(
-            "Audio file too large ({} MB). Maximum is ~20 MB.\n\
-             Speak for a shorter duration or reduce bitrate.",
-            audio_bytes.len() / 1_000_000
-        );
+    let response = client
+        .post("https://api.deepgram.com/v1/listen")
+        .header("Authorization", format!("Token {}", api_key))
+        .query(&[
+            ("model", "nova-3"),
+            ("punctuate", "true"),
+            ("smart_format", "true"),
+        ])
+        .header("Content-Type", "audio/mpeg")
+        .body(audio_bytes)
+        .send()
+        .await
+        .context("Failed to reach Deepgram API (check network/internet)")?;
+
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .context("Failed to read Deepgram API response")?;
+
+    if !status.is_success() {
+        let hint = match status.as_u16() {
+            401 => "\nHint: Your DEEPGRAM_API_KEY is invalid. Check ~/.config/voxtype/config.toml or your shell rc file.",
+            403 | 429 => "\nHint: Deepgram rate limit or quota exceeded. Falling back to next provider.",
+            413 => "\nHint: Audio file too large for Deepgram's API limit.",
+            _ => "",
+        };
+        anyhow::bail!("Deepgram API error (HTTP {}): {}{}", status, body, hint);
     }
+
+    let json: serde_json::Value = serde_json::from_str(&body)
+        .context("Failed to parse Deepgram JSON response")?;
+
+    let transcript = json["results"]["channels"][0]["alternatives"][0]["transcript"]
+        .as_str()
+        .context("Deepgram response missing transcript field")?;
+
+    Ok(transcript.to_string())
+}
+
+async fn transcribe_mistral(api_key: &str, config: &Config) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .context("Failed to create HTTP client")?;
+
+    let audio_bytes = fs::read(AUDIO_FILE).context("Failed to read audio file for upload")?;
+
+    let file_part = multipart::Part::bytes(audio_bytes)
+        .file_name("recording.mp3")
+        .mime_str("audio/mpeg")
+        .context("Invalid MIME type")?;
+
+    let mut form = multipart::Form::new()
+        .part("file", file_part)
+        .text("model", "voxtral-mini-latest");
+
+    if let Some(lang) = config.language() {
+        form = form.text("language", lang.to_string());
+    }
+
+    let response = client
+        .post("https://api.mistral.ai/v1/audio/transcriptions")
+        .header("Authorization", format!("Bearer {}", api_key))
+        .multipart(form)
+        .send()
+        .await
+        .context("Failed to reach Mistral API (check network/internet)")?;
+
+    let status = response.status();
+    let body = response
+        .text()
+        .await
+        .context("Failed to read Mistral API response")?;
+
+    if !status.is_success() {
+        let hint = match status.as_u16() {
+            401 => "\nHint: Your MISTRAL_API_KEY is invalid. Check ~/.config/voxtype/config.toml or your shell rc file.",
+            402 | 429 => "\nHint: Mistral rate limit exceeded. Falling back to next provider.",
+            413 => "\nHint: Audio file too large for Mistral's API limit.",
+            _ => "",
+        };
+        anyhow::bail!("Mistral API error (HTTP {}): {}{}", status, body, hint);
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&body)
+        .context("Failed to parse Mistral JSON response")?;
+
+    let text = json["text"]
+        .as_str()
+        .context("Mistral response missing 'text' field")?;
+
+    Ok(text.to_string())
+}
+
+async fn transcribe_groq(api_key: &str, config: &Config) -> Result<String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .context("Failed to create HTTP client")?;
+
+    let audio_bytes = fs::read(AUDIO_FILE).context("Failed to read audio file for upload")?;
 
     let file_part = multipart::Part::bytes(audio_bytes)
         .file_name("recording.mp3")
@@ -743,7 +876,7 @@ async fn transcribe(api_key: &str, config: &Config) -> Result<String> {
         return Ok(trimmed.to_string());
     }
 
-    anyhow::bail!("Empty response from Groq API (unexpected)");
+    anyhow::bail!("Empty response from Groq API (unexpected)")
 }
 
 // ── Text Injection ────────────────────────────────────────────
