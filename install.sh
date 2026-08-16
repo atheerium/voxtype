@@ -363,6 +363,7 @@ write_config() {
     fi
     echo "# deepgram_api_key = \"dg_...\"  # optional: export DEEPGRAM_API_KEY"
     echo "# mistral_api_key = \"m...\"     # optional: export MISTRAL_API_KEY"
+    echo "# default_provider = \"auto\"      # auto, deepgram, mistral, or groq"
     echo "language = \"en\"            # ISO-639-1 code, optional"
   } > "$CONFIG_FILE"
   if [ -z "$API_KEY" ]; then

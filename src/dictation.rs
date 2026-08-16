@@ -11,6 +11,7 @@ use tokio::process::Command as TokioCommand;
 use tokio::signal::unix::{signal, SignalKind};
 
 use crate::config::Config;
+use crate::stats::Stats;
 
 // ── Environment detection ──────────────────────────────────────────
 
@@ -687,13 +688,102 @@ async fn stop_and_transcribe() -> Result<String> {
 /// Fallback chain: Deepgram → Mistral → Groq.
 /// Each provider is tried in order; the first that returns usable text wins.
 /// Providers whose API key is missing are silently skipped.
+/// If `default_provider` is set to "deepgram", "mistral", or "groq", only that
+/// provider is tried (no fallback).
 async fn transcribe_with_fallback(config: &Config) -> Result<String> {
+    let provider = config.default_provider();
+
+    let mut stats = Stats::load();
+
+    // If a specific provider is configured (not "auto"), only try that one.
+    if provider != "auto" {
+        let result = match provider {
+            "deepgram" => {
+                match config.deepgram_api_key() {
+                    Ok(key) => {
+                        let start = Instant::now();
+                        let res = transcribe_deepgram(key).await;
+                        let elapsed = start.elapsed().as_millis() as u64;
+                        match &res {
+                            Ok(text) => {
+                                stats.record_success("deepgram", elapsed, text.len());
+                            }
+                            Err(_) => {
+                                stats.record_failure("deepgram", elapsed);
+                            }
+                        }
+                        res
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            "mistral" => {
+                match config.mistral_api_key() {
+                    Ok(key) => {
+                        let start = Instant::now();
+                        let res = transcribe_mistral(&key, config).await;
+                        let elapsed = start.elapsed().as_millis() as u64;
+                        match &res {
+                            Ok(text) => {
+                                stats.record_success("mistral", elapsed, text.len());
+                            }
+                            Err(_) => {
+                                stats.record_failure("mistral", elapsed);
+                            }
+                        }
+                        res
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            "groq" => {
+                match config.groq_api_key() {
+                    Ok(key) => {
+                        let start = Instant::now();
+                        let res = transcribe_groq(&key, config).await;
+                        let elapsed = start.elapsed().as_millis() as u64;
+                        match &res {
+                            Ok(text) => {
+                                stats.record_success("groq", elapsed, text.len());
+                            }
+                            Err(_) => {
+                                stats.record_failure("groq", elapsed);
+                            }
+                        }
+                        res
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            _ => anyhow::bail!(
+                "Unknown default_provider '{}'. Use deepgram, mistral, groq, or auto.",
+                provider
+            ),
+        };
+        let _ = stats.save();
+        return result;
+    }
+
+    // Auto mode: try each provider in order with fallback.
     // Try Deepgram first
     if let Ok(key) = config.deepgram_api_key() {
+        let start = Instant::now();
         match transcribe_deepgram(key).await {
-            Ok(text) if !text.trim().is_empty() => return Ok(text.trim().to_string()),
-            Ok(_) => {}
+            Ok(text) if !text.trim().is_empty() => {
+                let elapsed = start.elapsed().as_millis() as u64;
+                stats.record_success("deepgram", elapsed, text.len());
+                let _ = stats.save();
+                return Ok(text.trim().to_string());
+            }
+            Ok(_) => {
+                let elapsed = start.elapsed().as_millis() as u64;
+                stats.record_success("deepgram", elapsed, 0);
+                let _ = stats.save();
+            }
             Err(e) => {
+                let elapsed = start.elapsed().as_millis() as u64;
+                stats.record_failure("deepgram", elapsed);
+                let _ = stats.save();
                 write_log(&format!("Deepgram failed: {}; trying next provider", e));
             }
         }
@@ -701,10 +791,23 @@ async fn transcribe_with_fallback(config: &Config) -> Result<String> {
 
     // Try Mistral (Voxtral) second
     if let Ok(key) = config.mistral_api_key() {
+        let start = Instant::now();
         match transcribe_mistral(&key, config).await {
-            Ok(text) if !text.trim().is_empty() => return Ok(text.trim().to_string()),
-            Ok(_) => {}
+            Ok(text) if !text.trim().is_empty() => {
+                let elapsed = start.elapsed().as_millis() as u64;
+                stats.record_success("mistral", elapsed, text.len());
+                let _ = stats.save();
+                return Ok(text.trim().to_string());
+            }
+            Ok(_) => {
+                let elapsed = start.elapsed().as_millis() as u64;
+                stats.record_success("mistral", elapsed, 0);
+                let _ = stats.save();
+            }
             Err(e) => {
+                let elapsed = start.elapsed().as_millis() as u64;
+                stats.record_failure("mistral", elapsed);
+                let _ = stats.save();
                 write_log(&format!("Mistral failed: {}; trying next provider", e));
             }
         }
@@ -712,7 +815,19 @@ async fn transcribe_with_fallback(config: &Config) -> Result<String> {
 
     // Fall back to Groq
     let api_key = config.groq_api_key()?;
-    transcribe_groq(&api_key, config).await
+    let start = Instant::now();
+    let result = transcribe_groq(&api_key, config).await;
+    let elapsed = start.elapsed().as_millis() as u64;
+    match &result {
+        Ok(text) => {
+            stats.record_success("groq", elapsed, text.len());
+        }
+        Err(_) => {
+            stats.record_failure("groq", elapsed);
+        }
+    }
+    let _ = stats.save();
+    result
 }
 
 async fn transcribe_deepgram(api_key: String) -> Result<String> {

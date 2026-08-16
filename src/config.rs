@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use std::fs;
 use std::path::PathBuf;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub groq_api_key: Option<String>,
     pub deepgram_api_key: Option<String>,
@@ -13,6 +14,8 @@ pub struct Config {
     pub backend: Option<String>,
     /// PulseAudio source name or device (e.g. "default", "alsa_input.usb-...")
     pub audio_source: Option<String>,
+    /// Default speech provider: "deepgram", "mistral", "groq", or "auto" (fallback chain)
+    pub default_provider: Option<String>,
 }
 
 impl Config {
@@ -35,6 +38,7 @@ impl Config {
             language: None,
             backend: None,
             audio_source: None,
+            default_provider: None,
         })
     }
 
@@ -57,6 +61,46 @@ impl Config {
     pub fn language(&self) -> Option<&str> {
         self.language.as_deref()
     }
+
+    pub fn default_provider(&self) -> &str {
+        self.default_provider
+            .as_deref()
+            .unwrap_or("auto")
+    }
+
+    /// Write the current config back to the config file as TOML.
+    pub fn save(&self) -> Result<()> {
+        let config_path = config_path()?;
+        let parent = config_path
+            .parent()
+            .context("Config path has no parent directory")?;
+        fs::create_dir_all(parent)?;
+
+        // Serialize to TOML, preserving field order as written above.
+        let toml = config_toml(self);
+        fs::write(&config_path, toml)?;
+        Ok(())
+    }
+}
+
+fn config_toml(cfg: &Config) -> String {
+    let mut out = String::new();
+    macro_rules! opt {
+        ($name:expr, $val:expr) => {
+            if let Some(v) = $val {
+                out.push_str(&format!("{} = {:?}\n", $name, v));
+            }
+        };
+    }
+    opt!("groq_api_key", &cfg.groq_api_key);
+    opt!("deepgram_api_key", &cfg.deepgram_api_key);
+    opt!("mistral_api_key", &cfg.mistral_api_key);
+    opt!("model", &cfg.model);
+    opt!("language", &cfg.language);
+    opt!("backend", &cfg.backend);
+    opt!("audio_source", &cfg.audio_source);
+    opt!("default_provider", &cfg.default_provider);
+    out
 }
 
 /// Generic key resolver: config file value wins, then env var, then shell rc.
@@ -144,6 +188,7 @@ mod tests {
             language = "en"
             model = "whisper-tiny"
             audio_source = "alsa_input.usb-mic"
+            default_provider = "deepgram"
             "#,
         )
         .unwrap();
@@ -154,6 +199,7 @@ mod tests {
         assert_eq!(cfg.language(), Some("en"));
         assert_eq!(cfg.backend.as_deref(), Some("wayland"));
         assert_eq!(cfg.audio_source.as_deref(), Some("alsa_input.usb-mic"));
+        assert_eq!(cfg.default_provider(), "deepgram");
     }
 
     #[test]
@@ -166,9 +212,11 @@ mod tests {
             language: None,
             backend: None,
             audio_source: None,
+            default_provider: None,
         };
         assert_eq!(cfg.model(), "whisper-large-v3-turbo");
         assert_eq!(cfg.language(), None);
+        assert_eq!(cfg.default_provider(), "auto");
     }
 
     #[test]
@@ -182,6 +230,7 @@ mod tests {
             language: None,
             backend: None,
             audio_source: None,
+            default_provider: None,
         };
         std::env::set_var("GROQ_API_KEY", "gsk_from_env");
         assert_eq!(cfg.groq_api_key().unwrap(), "gsk_from_file");
@@ -195,6 +244,7 @@ mod tests {
             language: None,
             backend: None,
             audio_source: None,
+            default_provider: None,
         };
         assert_eq!(cfg.groq_api_key().unwrap(), "gsk_from_env");
 

@@ -1,5 +1,7 @@
 mod config;
 mod dictation;
+mod stats;
+mod tui;
 
 use anyhow::Result;
 use std::process::Command;
@@ -48,10 +50,33 @@ async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {
+        // Print help
+        Some("--help") | Some("-h") => {
+            println!("voxtype {} — voice-to-text dictation for Linux\n", env!("CARGO_PKG_VERSION"));
+            println!("USAGE:");
+            println!("  voxtype            Toggle recording (Ctrl+Space via daemon)");
+            println!("  voxtype --daemon   Start daemon in background");
+            println!("  voxtype --stats    Show provider usage statistics");
+            println!("  voxtype --configure  Interactively set default STT provider");
+            println!("  voxtype --version  Print version");
+            return Ok(());
+        }
+
         // Print version and exit
         Some("--version") | Some("-V") => {
             println!("voxtype {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
+        }
+
+        // Show provider statistics
+        Some("--stats") | Some("stats") => {
+            stats::Stats::load().print_table();
+            return Ok(());
+        }
+
+        // Interactive configuration
+        Some("--configure") | Some("configure") => {
+            return tui::run_configure();
         }
 
         // Internal: run as persistent daemon

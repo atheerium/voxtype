@@ -201,6 +201,7 @@ language = "en"                    # ISO-639-1 code, optional
 model = "whisper-large-v3-turbo"   # Groq Whisper model (Deepgram/Mistral use their own)
 backend = "auto"                   # "auto", "x11", or "wayland"
 audio_source = "default"           # PulseAudio/PipeWire source, optional
+default_provider = "auto"          # "auto", "deepgram", "mistral", or "groq"
 ```
 
 **API key resolution order** (per provider): `config.toml` → corresponding env
@@ -211,6 +212,16 @@ Mistral → Groq** — using whichever keys you have configured. The first
 provider that returns a non-empty transcription wins. If one fails (rate limit,
 network error, 401, etc.), the error is logged and the next provider is tried.
 Configure just one key for basic use, or all three for maximum reliability.
+
+Set `default_provider` to force a specific provider (skips the fallback chain).
+Use `"auto"` (default) to use the full fallback chain.
+
+**CLI commands:**
+```bash
+voxtype --help        # Show usage
+voxtype --stats       # Show provider usage statistics (calls, success rate, latency)
+voxtype --configure   # Interactive prompt to set default provider
+```
 
 ## Manual hotkey setup (if you skipped the installer's)
 
