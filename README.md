@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://github.com/atheerium/voxtype/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
   <a href="https://github.com/atheerium/voxtype/releases"><img src="https://img.shields.io/github/v/release/atheerium/voxtype?sort=semver&label=release" alt="Latest release"></a>
+  <a href="https://crates.io/crates/voxtype"><img src="https://img.shields.io/crates/d/voxtype" alt="Downloads"></a>
   <a href="https://github.com/atheerium/voxtype/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/atheerium/voxtype/ci.yml?branch=main&label=CI" alt="CI status"></a>
   <img src="https://img.shields.io/badge/size-2.4%20MB-blue.svg" alt="~2.4 MB binary">
   <img src="https://img.shields.io/badge/platform-Linux%20(X11%20%2B%20Wayland)-blueviolet.svg" alt="Linux X11 and Wayland">
