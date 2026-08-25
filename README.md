@@ -34,8 +34,14 @@ dependencies, downloads the prebuilt binary (or builds from source), writes
 your config, sets up autostart, binds <kbd>Ctrl</kbd>+<kbd>Space</kbd>, and
 starts the daemon.
 
-**You only need a Groq API key** (free at [console.groq.com](https://console.groq.com)) —
-set it once: `export GROQ_API_KEY="gsk_..."` or pass `--api-key` to the installer.
+**You only need a free API key.** The easiest path is:
+1. Get a free Groq key at [console.groq.com](https://console.groq.com).
+2. Run the installer with your key in one step:
+   ```bash
+   curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash -s -- --api-key gsk_...
+   ```
+
+Groq is tried first because it works out of the box. Deepgram and Mistral stay as optional fallbacks.
 
 > Try it without changing anything: add `--dry-run` to preview every step.
 > Want the very latest installer from `main`? Use

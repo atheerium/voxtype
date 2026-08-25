@@ -1,5 +1,5 @@
-use anyhow::{Context, Result};
 use crate::config::Config;
+use anyhow::{Context, Result};
 use std::io::Write;
 
 /// Lightweight interactive configuration for the default speech provider.
@@ -20,16 +20,34 @@ pub fn run_configure() -> Result<()> {
         let has_key = match *p {
             "auto" => true,
             "groq" => {
-                config.groq_api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false)
-                    || std::env::var("GROQ_API_KEY").map(|k| !k.is_empty()).unwrap_or(false)
+                config
+                    .groq_api_key
+                    .as_ref()
+                    .map(|k| !k.is_empty())
+                    .unwrap_or(false)
+                    || std::env::var("GROQ_API_KEY")
+                        .map(|k| !k.is_empty())
+                        .unwrap_or(false)
             }
             "deepgram" => {
-                config.deepgram_api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false)
-                    || std::env::var("DEEPGRAM_API_KEY").map(|k| !k.is_empty()).unwrap_or(false)
+                config
+                    .deepgram_api_key
+                    .as_ref()
+                    .map(|k| !k.is_empty())
+                    .unwrap_or(false)
+                    || std::env::var("DEEPGRAM_API_KEY")
+                        .map(|k| !k.is_empty())
+                        .unwrap_or(false)
             }
             "mistral" => {
-                config.mistral_api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false)
-                    || std::env::var("MISTRAL_API_KEY").map(|k| !k.is_empty()).unwrap_or(false)
+                config
+                    .mistral_api_key
+                    .as_ref()
+                    .map(|k| !k.is_empty())
+                    .unwrap_or(false)
+                    || std::env::var("MISTRAL_API_KEY")
+                        .map(|k| !k.is_empty())
+                        .unwrap_or(false)
             }
             _ => false,
         };
@@ -51,7 +69,10 @@ pub fn run_configure() -> Result<()> {
     let input = input.trim();
 
     if input.is_empty() {
-        println!("No changes made (press Enter to keep current: {}).", current);
+        println!(
+            "No changes made (press Enter to keep current: {}).",
+            current
+        );
         return Ok(());
     }
 
@@ -66,16 +87,34 @@ pub fn run_configure() -> Result<()> {
     if selected != "auto" {
         let has_key = match selected {
             "groq" => {
-                config.groq_api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false)
-                    || std::env::var("GROQ_API_KEY").map(|k| !k.is_empty()).unwrap_or(false)
+                config
+                    .groq_api_key
+                    .as_ref()
+                    .map(|k| !k.is_empty())
+                    .unwrap_or(false)
+                    || std::env::var("GROQ_API_KEY")
+                        .map(|k| !k.is_empty())
+                        .unwrap_or(false)
             }
             "deepgram" => {
-                config.deepgram_api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false)
-                    || std::env::var("DEEPGRAM_API_KEY").map(|k| !k.is_empty()).unwrap_or(false)
+                config
+                    .deepgram_api_key
+                    .as_ref()
+                    .map(|k| !k.is_empty())
+                    .unwrap_or(false)
+                    || std::env::var("DEEPGRAM_API_KEY")
+                        .map(|k| !k.is_empty())
+                        .unwrap_or(false)
             }
             "mistral" => {
-                config.mistral_api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false)
-                    || std::env::var("MISTRAL_API_KEY").map(|k| !k.is_empty()).unwrap_or(false)
+                config
+                    .mistral_api_key
+                    .as_ref()
+                    .map(|k| !k.is_empty())
+                    .unwrap_or(false)
+                    || std::env::var("MISTRAL_API_KEY")
+                        .map(|k| !k.is_empty())
+                        .unwrap_or(false)
             }
             _ => true,
         };

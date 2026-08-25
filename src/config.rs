@@ -63,9 +63,7 @@ impl Config {
     }
 
     pub fn default_provider(&self) -> &str {
-        self.default_provider
-            .as_deref()
-            .unwrap_or("auto")
+        self.default_provider.as_deref().unwrap_or("auto")
     }
 
     /// Write the current config back to the config file as TOML.
