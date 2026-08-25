@@ -122,7 +122,13 @@ impl Stats {
             let success_pct = (s.successes * 100).checked_div(s.calls).unwrap_or(0);
             println!(
                 "{:<12} {:>6} {:>6} {:>6} {:>10} {:>10} {:>11}% {:>12}",
-                name, s.calls, s.successes, s.failures, avg_ms, avg_chars, success_pct,
+                name,
+                s.calls,
+                s.successes,
+                s.failures,
+                avg_ms,
+                avg_chars,
+                success_pct,
                 s.total_latency_ms
             );
         }

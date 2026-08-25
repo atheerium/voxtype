@@ -731,21 +731,39 @@ async fn transcribe_with_fallback(config: &Config) -> Result<String> {
     // If a specific provider is configured (not "auto"), only try that one.
     if provider != "auto" {
         let result = match provider {
-            "deepgram" => try_provider("deepgram", || async {
-                let key = config.deepgram_api_key()?;
-                transcribe_deepgram(key).await
-            }, &mut stats)
-                .await,
-            "mistral" => try_provider("mistral", || async {
-                let key = config.mistral_api_key()?;
-                transcribe_mistral(&key, config).await
-            }, &mut stats)
-                .await,
-            "groq" => try_provider("groq", || async {
-                let key = config.groq_api_key()?;
-                transcribe_groq(&key, config).await
-            }, &mut stats)
-                .await,
+            "deepgram" => {
+                try_provider(
+                    "deepgram",
+                    || async {
+                        let key = config.deepgram_api_key()?;
+                        transcribe_deepgram(key).await
+                    },
+                    &mut stats,
+                )
+                .await
+            }
+            "mistral" => {
+                try_provider(
+                    "mistral",
+                    || async {
+                        let key = config.mistral_api_key()?;
+                        transcribe_mistral(&key, config).await
+                    },
+                    &mut stats,
+                )
+                .await
+            }
+            "groq" => {
+                try_provider(
+                    "groq",
+                    || async {
+                        let key = config.groq_api_key()?;
+                        transcribe_groq(&key, config).await
+                    },
+                    &mut stats,
+                )
+                .await
+            }
             _ => anyhow::bail!(
                 "Unknown default_provider '{}'. Use deepgram, mistral, groq, or auto.",
                 provider
@@ -879,8 +897,8 @@ async fn transcribe_deepgram(api_key: String) -> Result<String> {
         anyhow::bail!("Deepgram API error (HTTP {}): {}{}", status, body, hint);
     }
 
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .context("Failed to parse Deepgram JSON response")?;
+    let json: serde_json::Value =
+        serde_json::from_str(&body).context("Failed to parse Deepgram JSON response")?;
 
     let transcript = json["results"]["channels"][0]["alternatives"][0]["transcript"]
         .as_str()
@@ -934,8 +952,8 @@ async fn transcribe_mistral(api_key: &str, config: &Config) -> Result<String> {
         anyhow::bail!("Mistral API error (HTTP {}): {}{}", status, body, hint);
     }
 
-    let json: serde_json::Value = serde_json::from_str(&body)
-        .context("Failed to parse Mistral JSON response")?;
+    let json: serde_json::Value =
+        serde_json::from_str(&body).context("Failed to parse Mistral JSON response")?;
 
     let text = json["text"]
         .as_str()
