@@ -6,7 +6,7 @@ mod tui;
 use anyhow::Result;
 use std::process::Command;
 
-use dictation::{daemon_pid, daemon_running};
+use dictation::{daemon_pid, daemon_running, process_alive};
 
 fn spawn_daemon() -> Result<()> {
     Command::new(std::env::current_exe()?)
@@ -52,10 +52,14 @@ async fn main() -> Result<()> {
     match args.get(1).map(|s| s.as_str()) {
         // Print help
         Some("--help") | Some("-h") => {
-            println!("voxtype {} — voice-to-text dictation for Linux\n", env!("CARGO_PKG_VERSION"));
+            println!(
+                "voxtype {} — voice-to-text dictation for Linux\n",
+                env!("CARGO_PKG_VERSION")
+            );
             println!("USAGE:");
             println!("  voxtype            Toggle recording (Ctrl+Space via daemon)");
             println!("  voxtype --daemon   Start daemon in background");
+            println!("  voxtype --restart  Restart daemon (picks up new binary)");
             println!("  voxtype --stats    Show provider usage statistics");
             println!("  voxtype --configure  Interactively set default STT provider");
             println!("  voxtype --version  Print version");
@@ -87,6 +91,22 @@ async fn main() -> Result<()> {
             if !daemon_running() {
                 spawn_daemon()?;
             }
+            return Ok(());
+        }
+
+        // Restart daemon: kill existing and spawn fresh (picks up new binary)
+        Some("--restart") | Some("restart") => {
+            if let Some(pid) = daemon_pid() {
+                send_signal("TERM", pid)?;
+                // Wait for process to exit
+                for _ in 0..50 {
+                    if !process_alive(pid) {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+            }
+            spawn_daemon()?;
             return Ok(());
         }
 

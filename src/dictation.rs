@@ -186,7 +186,7 @@ pub fn daemon_pid() -> Option<u32> {
         .and_then(|c| c.trim().parse::<u32>().ok())
 }
 
-fn process_alive(pid: u32) -> bool {
+pub fn process_alive(pid: u32) -> bool {
     Command::new("kill")
         .arg("-0")
         .arg(pid.to_string())
