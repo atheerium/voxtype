@@ -303,6 +303,34 @@ fn kill_ffmpeg() {
     }
 }
 
+/// Wait for the audio file to be written and ffmpeg to finish flushing.
+/// Returns early once the ffmpeg process has exited (its output buffers
+/// are flushed), rather than always sleeping the full `timeout`. The
+/// timeout is a ceiling; the actual wait is typically one 50 ms poll.
+async fn wait_for_audio_file(path: &str, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    let check_interval = Duration::from_millis(50);
+    loop {
+        // If the ffmpeg process is gone AND the file exists, its buffers
+        // have been flushed and synced to disk.
+        if !is_ffmpeg_running() && Path::new(path).exists() {
+            return;
+        }
+        if Instant::now() >= deadline {
+            return;
+        }
+        tokio::time::sleep(check_interval).await;
+    }
+}
+
+/// True if a process named `ffmpeg` is currently running (i.e. the lockfile
+/// PID still resolves to an ffmpeg process).
+fn is_ffmpeg_running() -> bool {
+    read_lockfile_pid()
+        .map(|pid| is_process_named(pid, "ffmpeg"))
+        .unwrap_or(false)
+}
+
 // ── Tool validation ───────────────────────────────────────────────
 
 fn require_tool(name: &str) -> bool {
@@ -636,8 +664,10 @@ fn start_recording() -> Result<()> {
 async fn stop_and_transcribe() -> Result<String> {
     kill_ffmpeg();
 
-    // Give ffmpeg time to finalize the file
-    tokio::time::sleep(Duration::from_millis(400)).await;
+    // Wait for ffmpeg to terminate and finalize the audio file.
+    // Polling the file size stabilises once ffmpeg has flushed its buffers
+    // and exited; most of the time this is far less than the old fixed 400 ms.
+    wait_for_audio_file(AUDIO_FILE, Duration::from_millis(400)).await;
 
     clear_recording();
 
@@ -685,148 +715,129 @@ async fn stop_and_transcribe() -> Result<String> {
     Ok(text)
 }
 
-/// Fallback chain: Deepgram → Mistral → Groq.
-/// Each provider is tried in order; the first that returns usable text wins.
-/// Providers whose API key is missing are silently skipped.
-/// If `default_provider` is set to "deepgram", "mistral", or "groq", only that
-/// provider is tried (no fallback).
+/// Fallback chain driven by historical provider performance.
+///
+/// When `default_provider` is a specific name ("deepgram", "mistral",
+/// "groq"), only that provider is tried. When it is "auto", providers are
+/// ordered by `Stats::ranked_providers`: reliability (Laplace-smoothed
+/// success rate) is the primary key, average latency the tiebreaker.
+/// This means the most reliable provider is always attempted first,
+/// minimising time lost to failed calls, while the fastest provider
+/// wins when reliability is tied.
 async fn transcribe_with_fallback(config: &Config) -> Result<String> {
     let provider = config.default_provider();
-
     let mut stats = Stats::load();
 
     // If a specific provider is configured (not "auto"), only try that one.
     if provider != "auto" {
         let result = match provider {
-            "deepgram" => {
-                match config.deepgram_api_key() {
-                    Ok(key) => {
-                        let start = Instant::now();
-                        let res = transcribe_deepgram(key).await;
-                        let elapsed = start.elapsed().as_millis() as u64;
-                        match &res {
-                            Ok(text) => {
-                                stats.record_success("deepgram", elapsed, text.len());
-                            }
-                            Err(_) => {
-                                stats.record_failure("deepgram", elapsed);
-                            }
-                        }
-                        res
-                    }
-                    Err(e) => Err(e),
-                }
-            }
-            "mistral" => {
-                match config.mistral_api_key() {
-                    Ok(key) => {
-                        let start = Instant::now();
-                        let res = transcribe_mistral(&key, config).await;
-                        let elapsed = start.elapsed().as_millis() as u64;
-                        match &res {
-                            Ok(text) => {
-                                stats.record_success("mistral", elapsed, text.len());
-                            }
-                            Err(_) => {
-                                stats.record_failure("mistral", elapsed);
-                            }
-                        }
-                        res
-                    }
-                    Err(e) => Err(e),
-                }
-            }
-            "groq" => {
-                match config.groq_api_key() {
-                    Ok(key) => {
-                        let start = Instant::now();
-                        let res = transcribe_groq(&key, config).await;
-                        let elapsed = start.elapsed().as_millis() as u64;
-                        match &res {
-                            Ok(text) => {
-                                stats.record_success("groq", elapsed, text.len());
-                            }
-                            Err(_) => {
-                                stats.record_failure("groq", elapsed);
-                            }
-                        }
-                        res
-                    }
-                    Err(e) => Err(e),
-                }
-            }
+            "deepgram" => try_provider("deepgram", || async {
+                let key = config.deepgram_api_key()?;
+                transcribe_deepgram(key).await
+            }, &mut stats)
+                .await,
+            "mistral" => try_provider("mistral", || async {
+                let key = config.mistral_api_key()?;
+                transcribe_mistral(&key, config).await
+            }, &mut stats)
+                .await,
+            "groq" => try_provider("groq", || async {
+                let key = config.groq_api_key()?;
+                transcribe_groq(&key, config).await
+            }, &mut stats)
+                .await,
             _ => anyhow::bail!(
                 "Unknown default_provider '{}'. Use deepgram, mistral, groq, or auto.",
                 provider
             ),
         };
         let _ = stats.save();
-        return result;
+        return result.map(|t| t.trim().to_string());
     }
 
-    // Auto mode: try each provider in order with fallback.
-    // Try Deepgram first
-    if let Ok(key) = config.deepgram_api_key() {
-        let start = Instant::now();
-        match transcribe_deepgram(key).await {
+    // Auto mode: rank available providers by historical reliability + latency.
+    let available: Vec<String> = ["deepgram", "mistral", "groq"]
+        .iter()
+        .copied()
+        .filter(|p| provider_key(config, p).is_ok())
+        .map(String::from)
+        .collect();
+
+    if available.is_empty() {
+        anyhow::bail!(
+            "No STT API keys configured. Set at least one of:\n  \
+             DEEPGRAM_API_KEY=...\n  GROQ_API_KEY=...\n  MISTRAL_API_KEY=..."
+        );
+    }
+
+    let ranked = stats.ranked_providers(&available);
+    write_log(&format!("Provider ranking: {}", ranked.join(" > ")));
+
+    // Try each provider in ranked order; first non-empty success wins.
+    for name in &ranked {
+        let result = try_provider(name, || provider_call(config, name), &mut stats).await;
+        match result {
             Ok(text) if !text.trim().is_empty() => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                stats.record_success("deepgram", elapsed, text.len());
                 let _ = stats.save();
                 return Ok(text.trim().to_string());
             }
             Ok(_) => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                stats.record_success("deepgram", elapsed, 0);
-                let _ = stats.save();
+                write_log(&format!("{} returned empty; trying next", name));
             }
             Err(e) => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                stats.record_failure("deepgram", elapsed);
-                let _ = stats.save();
-                write_log(&format!("Deepgram failed: {}; trying next provider", e));
+                write_log(&format!("{} failed: {}; trying next provider", name, e));
             }
         }
+        let _ = stats.save();
     }
 
-    // Try Mistral (Voxtral) second
-    if let Ok(key) = config.mistral_api_key() {
-        let start = Instant::now();
-        match transcribe_mistral(&key, config).await {
-            Ok(text) if !text.trim().is_empty() => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                stats.record_success("mistral", elapsed, text.len());
-                let _ = stats.save();
-                return Ok(text.trim().to_string());
-            }
-            Ok(_) => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                stats.record_success("mistral", elapsed, 0);
-                let _ = stats.save();
-            }
-            Err(e) => {
-                let elapsed = start.elapsed().as_millis() as u64;
-                stats.record_failure("mistral", elapsed);
-                let _ = stats.save();
-                write_log(&format!("Mistral failed: {}; trying next provider", e));
-            }
+    anyhow::bail!("All configured providers failed or returned empty results")
+}
+
+/// Resolve the API key for a provider name, returning Ok only when a key
+/// is available (file config or env var).
+fn provider_key(config: &Config, name: &str) -> Result<()> {
+    match name {
+        "deepgram" => config.deepgram_api_key().map(|_| ()),
+        "mistral" => config.mistral_api_key().map(|_| ()),
+        "groq" => config.groq_api_key().map(|_| ()),
+        _ => anyhow::bail!("Unknown provider '{}'", name),
+    }
+}
+
+/// Build the transcription call for a provider name. The key is resolved
+/// inside so that missing-key errors propagate cleanly to the caller.
+async fn provider_call(config: &Config, name: &str) -> Result<String> {
+    match name {
+        "deepgram" => {
+            let key = config.deepgram_api_key()?;
+            transcribe_deepgram(key).await
         }
+        "mistral" => {
+            let key = config.mistral_api_key()?;
+            transcribe_mistral(&key, config).await
+        }
+        "groq" => {
+            let key = config.groq_api_key()?;
+            transcribe_groq(&key, config).await
+        }
+        _ => anyhow::bail!("Unknown provider '{}'", name),
     }
+}
 
-    // Fall back to Groq
-    let api_key = config.groq_api_key()?;
+/// Time a single provider attempt and record its result in stats.
+async fn try_provider<F, Fut>(name: &str, call: F, stats: &mut Stats) -> Result<String>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<String>>,
+{
     let start = Instant::now();
-    let result = transcribe_groq(&api_key, config).await;
+    let result = call().await;
     let elapsed = start.elapsed().as_millis() as u64;
     match &result {
-        Ok(text) => {
-            stats.record_success("groq", elapsed, text.len());
-        }
-        Err(_) => {
-            stats.record_failure("groq", elapsed);
-        }
+        Ok(text) => stats.record_success(name, elapsed, text.len()),
+        Err(_) => stats.record_failure(name, elapsed),
     }
-    let _ = stats.save();
     result
 }
 
@@ -1004,12 +1015,18 @@ const CLIP_CMD_TIMEOUT: Duration = Duration::from_secs(3);
 /// wedge under compositor load; never let it block dictation indefinitely.
 const WTYPE_TIMEOUT: Duration = Duration::from_millis(2500);
 /// Budget for verifying the clipboard via wl-paste before sending the key.
-const VERIFY_TIMEOUT: Duration = Duration::from_millis(1500);
+/// wl-paste blocks when the clipboard is empty, so this is the per-attempt
+/// ceiling. The retry loop means total verify time is at most 2 × this.
+const VERIFY_TIMEOUT: Duration = Duration::from_millis(500);
 /// Budget for compositor IPC (swaymsg / hyprctl) used in focus detection.
 const IPC_TIMEOUT: Duration = Duration::from_millis(800);
 /// Budget for desktop notifications; a wedged notification daemon must not
 /// hold up the toggle.
 const NOTIFY_TIMEOUT: Duration = Duration::from_secs(2);
+/// Fixed sleep to let the X11 clipboard propagate after xsel/xclip sets it.
+/// wl-copy and its X11 analogues report success once the data is registered;
+/// a short sleep avoids skipping the paste before the selection is live.
+const CLIPBOARD_PROPAGATE_DELAY: Duration = Duration::from_millis(50);
 
 /// Outcome of a bounded external command run.
 #[derive(Debug)]
@@ -1152,7 +1169,7 @@ fn inject_text_x11(text: &str) -> Result<()> {
     }
 
     // 3. Wait for clipboard propagation
-    std::thread::sleep(Duration::from_millis(100));
+    std::thread::sleep(CLIPBOARD_PROPAGATE_DELAY);
 
     // 4. VS Code has keyboard shortcut conflicts with xdotool paste
     if is_vscode_window_x11() {
@@ -1309,7 +1326,7 @@ fn paste_with_wtype(target: Option<&FocusTarget>, compositor: WaylandCompositor)
                 // Retry the same key once: a non-zero exit means the key was
                 // not delivered (e.g. the compositor was busy), so repeating
                 // it cannot double-paste.
-                thread::sleep(Duration::from_millis(120));
+                thread::sleep(Duration::from_millis(80));
                 let mut retry = Command::new("wtype");
                 retry.args(*keys);
                 match run_limited_capture(&mut retry, WTYPE_TIMEOUT) {
