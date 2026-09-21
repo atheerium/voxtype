@@ -127,7 +127,7 @@ pub fn run_configure() -> Result<()> {
             };
             anyhow::bail!(
                 "You selected '{}' but no API key is configured.\n\
-                 Add it to ~/.config/voxtype/config.toml or export {} in your shell.",
+                 Add it to ~/.config/libretype/config.toml or export {} in your shell.",
                 selected,
                 env_var
             );

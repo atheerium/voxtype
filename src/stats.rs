@@ -134,14 +134,14 @@ impl Stats {
         }
 
         if rows.is_empty() {
-            println!("No statistics recorded yet. Use voxtype to start transcribing.");
+            println!("No statistics recorded yet. Use libretype to start transcribing.");
         }
     }
 }
 
 fn stats_path() -> Result<PathBuf> {
     let data_dir = dirs::data_dir().context("Cannot determine data directory")?;
-    Ok(data_dir.join("voxtype").join("stats.json"))
+    Ok(data_dir.join("libretype").join("stats.json"))
 }
 
 #[cfg(test)]

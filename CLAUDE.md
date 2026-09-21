@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**voxtype** is a free, open-source voice-to-text dictation tool for Linux —
+**libretype** is a free, open-source voice-to-text dictation tool for Linux —
 marketed as the "Wispr Flow alternative." Press a hotkey, speak, and the transcribed text is automatically pasted into your active application.
 
 Supports X11 (XFCE, GNOME X11, i3) and Wayland (Sway, Hyprland, KDE, GNOME) via auto-detection.
 
-Published at https://github.com/atheerium/voxtype (public, `main` branch).
+Published at https://github.com/atheerium/libretype (public, `main` branch).
 Brand: made by **Atheerium** — website https://atheerium.com, donations
 https://ko-fi.com/atheerium. Keep the Atheerium credit in README, LICENSE,
 install.sh, and package metadata.
@@ -24,15 +24,15 @@ cargo clippy --all-targets -- -D warnings   # CI enforces zero warnings
 cargo fmt --check        # CI checks formatting
 ```
 
-The binary is output to `target/release/voxtype`.
+The binary is output to `target/release/libretype`.
 
 ## Release & Installer
 
 - **README.md** is the marketing/SEO surface: one-command install at the top,
   Wispr Flow comparison, FAQ. Keep install commands in sync with `install.sh`.
-- **install.sh** is the one-command installer (`curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash`).
+- **install.sh** is the one-command installer (`curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash`).
   - Detects display server/compositor/distro, installs deps, downloads a
-    prebuilt binary from GitHub Releases (assets named `voxtype-<triple>.tar.gz`
+    prebuilt binary from GitHub Releases (assets named `libretype-<triple>.tar.gz`
     with `sha256sums.txt`), falls back to `cargo install --git`.
   - Validate with `shellcheck install.sh`, `bash -n install.sh`, and
     `bash install.sh --dry-run`.
@@ -40,7 +40,7 @@ The binary is output to `target/release/voxtype`.
 - **Release flow**: pushing a `v*` tag runs `.github/workflows/release.yml`,
   which builds `x86_64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, and
   `aarch64-unknown-linux-musl` and publishes a GitHub Release.
-  - **Bump `version` in `Cargo.toml` FIRST** (it feeds `voxtype --version`),
+  - **Bump `version` in `Cargo.toml` FIRST** (it feeds `libretype --version`),
     commit, then tag `v<same-version>`.
   - The workflow ships `install.sh` as a release asset so the README one-liner
     (`releases/latest/download/install.sh`) is served by the fast object CDN.
@@ -49,18 +49,18 @@ The binary is output to `target/release/voxtype`.
 ## Architecture
 
 ```
-Ctrl+Space → voxtype CLI → SIGUSR1 → Daemon (background)
-                                     ├── ffmpeg records mic → /tmp/voxtype.mp3
+Ctrl+Space → libretype CLI → SIGUSR1 → Daemon (background)
+                                     ├── ffmpeg records mic → /tmp/libretype.mp3
                                      └── Toggle off → Groq API → clipboard → paste
 ```
 
 - **[main.rs](src/main.rs)**: CLI entry point. Handles `--daemon` flag to start background daemon, or sends SIGUSR1 to toggle recording when invoked without flags.
-- **[config.rs](src/config.rs)**: Configuration loading. Reads `~/.config/voxtype/config.toml`, falls back to `GROQ_API_KEY` env var, then parses shell RC files.
+- **[config.rs](src/config.rs)**: Configuration loading. Reads `~/.config/libretype/config.toml`, falls back to `GROQ_API_KEY` env var, then parses shell RC files.
 - **[dictation.rs](src/dictation.rs)**: Core daemon logic. Environment detection (X11/Wayland, compositor, audio system), recording via ffmpeg, Groq API transcription, text injection via clipboard + keyboard simulation.
 
 ### Key Design Patterns
 
-- **Daemon**: Spawns as background process via `__daemon` internal argument. Writes PID to `/tmp/voxtype.pid`, uses lockfile at `/tmp/voxtype.lock` to track recording state.
+- **Daemon**: Spawns as background process via `__daemon` internal argument. Writes PID to `/tmp/libretype.pid`, uses lockfile at `/tmp/libretype.lock` to track recording state.
 - **Signal handlers first**: `run_daemon` registers SIGUSR1/SIGTERM/SIGINT handlers before any slow startup work. A toggle arriving mid-startup would otherwise hit SIGUSR1's default action and kill the daemon.
 - **Single-instance guard**: the daemon exits quietly if the PID file is owned by another live process, closing the rapid-double-hotkey spawn race.
 - **Startup self-healing**: a crashed daemon leaves an orphaned ffmpeg + stale lockfile; startup kills the orphan (PID verified against `/proc` so a recycled PID is never touched) and clears stale lock/audio state.
@@ -68,11 +68,11 @@ Ctrl+Space → voxtype CLI → SIGUSR1 → Daemon (background)
 - **Graceful Degradation**: Missing tools (xdotool, wtype, notify-send) are handled with fallbacks. Clipboard is always set even if keyboard paste fails. VS Code is detected (focused window on X11, `pgrep` on Wayland) and keyboard paste is skipped for it due to a shortcut conflict.
 - **Bounded, window-aware text injection**: every external command in the injection path (wl-copy, wl-paste, wtype, xdotool, swaymsg, notify-send) runs with a hard timeout via `run_limited`, so a wedged tool can never block dictation for more than a few seconds. On Wayland, the focused window is detected via Sway/Hyprland IPC (`app_id` / `window_properties`), the clipboard offer is verified with `wl-paste` before the paste key is sent, and known apps get exactly one shortcut (terminals: Ctrl+Shift+V, browsers: Ctrl+V) instead of a blind fallback chain. XWayland windows are routed through the X11 injector (xdotool + xsel), which is faster and also sidesteps a wlroots/Sway bug where `zwp_virtual_keyboard_v1` input is silently dropped for native Wayland windows (see README FAQ). Injection runs on a blocking thread so the async runtime never freezes. Diagnostics (focus class, clipboard verification timing, per-attempt results) go to the daemon log.
 - **Environment Detection**: Auto-detects X11 vs Wayland, compositor (Sway/Hyprland/KDE/Gnome), and audio system (PulseAudio/PipeWire). `effective_env()` resolves the backend once — config `backend` override wins, else auto-detection — and is used consistently by startup logging, the display check, dependency validation, and text injection.
-- **Log timestamps** are UTC with full date: `2026-08-05 21:38:43.817`. Written to `~/.local/share/voxtype/daemon.log`.
+- **Log timestamps** are UTC with full date: `2026-08-05 21:38:43.817`. Written to `~/.local/share/libretype/daemon.log`.
 
 ## Configuration
 
-Create `~/.config/voxtype/config.toml`:
+Create `~/.config/libretype/config.toml`:
 
 ```toml
 groq_api_key = "gsk_..."    # Required: get from console.groq.com
@@ -94,8 +94,8 @@ Optional: `notify-send` (desktop notifications), `pactl` (audio device detection
 ## Hotkey Setup
 
 - **XFCE**: `xfconf-query` to bind Ctrl+Space
-- **Sway**: `bindsym Ctrl+space exec /path/to/voxtype` (NOT `--to-code`; plain
+- **Sway**: `bindsym Ctrl+space exec /path/to/libretype` (NOT `--to-code`; plain
   bindsym is what works reliably — the `--to-code` form failed to fire on sway 1.9)
-- **Hyprland**: `bind = CTRL, SPACE, exec, /path/to/voxtype`
+- **Hyprland**: `bind = CTRL, SPACE, exec, /path/to/libretype`
 
-Add to autostart with `voxtype --daemon`.
+Add to autostart with `libretype --daemon`.

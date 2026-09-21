@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/voxtype-banner.svg" width="100%" alt="voxtype — free, open-source voice-to-text dictation for Linux. Press Ctrl+Space, speak, done.">
+  <img src="docs/libretype-banner.svg" width="100%" alt="libretype — free, open-source voice-to-text dictation for Linux. Press Ctrl+Space, speak, done.">
 </p>
 
-# voxtype — Free, Open-Source Voice-to-Text Dictation for Linux
+# libretype — Free, Open-Source Voice-to-Text Dictation for Linux
 
 <p align="center">
   The <strong>Wispr Flow alternative</strong> that is free, private, and Linux-first.<br>
@@ -10,14 +10,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/atheerium/voxtype/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
-  <a href="https://github.com/atheerium/voxtype/releases"><img src="https://img.shields.io/github/v/release/atheerium/voxtype?sort=semver&label=release" alt="Latest release"></a>
-  <a href="https://crates.io/crates/voxtype"><img src="https://img.shields.io/crates/d/voxtype" alt="Downloads"></a>
-  <a href="https://github.com/atheerium/voxtype/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/atheerium/voxtype/ci.yml?branch=main&label=CI" alt="CI status"></a>
+  <a href="https://github.com/atheerium/libretype/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT license"></a>
+  <a href="https://github.com/atheerium/libretype/releases"><img src="https://img.shields.io/github/v/release/atheerium/libretype?sort=semver&label=release" alt="Latest release"></a>
+  <a href="https://crates.io/crates/libretype"><img src="https://img.shields.io/crates/d/libretype" alt="Downloads"></a>
+  <a href="https://github.com/atheerium/libretype/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/atheerium/libretype/ci.yml?branch=main&label=CI" alt="CI status"></a>
   <img src="https://img.shields.io/badge/size-2.4%20MB-blue.svg" alt="~2.4 MB binary">
   <img src="https://img.shields.io/badge/platform-Linux%20(X11%20%2B%20Wayland)-blueviolet.svg" alt="Linux X11 and Wayland">
   <img src="https://img.shields.io/badge/dictation-Whisper%20via%20Groq-cyan.svg" alt="Whisper via Groq">
-  <a href="https://github.com/atheerium/voxtype/stargazers"><img src="https://img.shields.io/github/stars/atheerium/voxtype?style=social" alt="GitHub stars"></a>
+  <a href="https://github.com/atheerium/libretype/stargazers"><img src="https://img.shields.io/github/stars/atheerium/libretype?style=social" alt="GitHub stars"></a>
   <a href="https://ko-fi.com/atheerium"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-%F0%9F%8E%81%20ko--fi.com/atheerium-ff5e5b.svg" alt="Support on Ko-fi"></a>
 </p>
 
@@ -26,7 +26,7 @@
 ## 🚀 Install in one command
 
 ```bash
-curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash
 ```
 
 That's it. The installer detects your display server and compositor, installs
@@ -38,22 +38,22 @@ starts the daemon.
 1. Get a free Groq key at [console.groq.com](https://console.groq.com).
 2. Run the installer with your key in one step:
    ```bash
-   curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash -s -- --api-key gsk_...
+   curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash -s -- --api-key gsk_...
    ```
 
 Groq is tried first because it works out of the box. Deepgram and Mistral stay as optional fallbacks.
 
 > Try it without changing anything: add `--dry-run` to preview every step.
 > Want the very latest installer from `main`? Use
-> `https://raw.githubusercontent.com/atheerium/voxtype/main/install.sh` instead.
+> `https://raw.githubusercontent.com/atheerium/libretype/main/install.sh` instead.
 
 ---
 
-## What is voxtype?
+## What is libretype?
 
-**voxtype is a free, open-source, privacy-friendly voice-to-text (speech-to-text /
+**libretype is a free, open-source, privacy-friendly voice-to-text (speech-to-text /
 dictation) tool for Linux.** It turns your microphone into a keyboard: you press a
-global hotkey, speak naturally, and voxtype transcribes your words and types them
+global hotkey, speak naturally, and libretype transcribes your words and types them
 into whatever app has focus — a terminal, editor, browser, or chat window.
 
 It is built around a single idea: **dictation should be one keystroke away, work
@@ -61,18 +61,18 @@ everywhere, and cost nothing.** No Electron app, no account, no subscription, no
 vendor lock-in. The whole binary is ~2.4 MB and the source is MIT-licensed.
 
 - **Linux-first.** Runs on X11 and Wayland (Sway, Hyprland, KDE Plasma, GNOME, XFCE, i3, and more).
-- **Wispr Flow alternative.** Wispr Flow is popular but macOS/Windows-only, closed-source, and subscription-based. voxtype is the free, open-source equivalent Linux users have been missing.
-- **Private by default.** Audio goes directly from your machine to the speech provider you choose (Groq's Whisper API by default). Bring your own API key — no voxtype account, no telemetry, no data brokering.
+- **Wispr Flow alternative.** Wispr Flow is popular but macOS/Windows-only, closed-source, and subscription-based. libretype is the free, open-source equivalent Linux users have been missing.
+- **Private by default.** Audio goes directly from your machine to the speech provider you choose (Groq's Whisper API by default). Bring your own API key — no libretype account, no telemetry, no data brokering.
 - **Fast.** Record locally with ffmpeg, transcribe with OpenAI-compatible Whisper models, and paste results in seconds.
 
-## Why use voxtype?
+## Why use libretype?
 
-| Problem | voxtype's answer |
+| Problem | libretype's answer |
 |---|---|
 | Wispr Flow doesn't run on Linux | Built for X11 **and** Wayland, first class |
 | Dictation apps cost $15–30/month | **100% free**, MIT licensed, no subscriptions |
 | Closed-source apps you can't audit | Entire source is readable and auditable |
-| Privacy-opaque clouds | Bring your own API key; no voxtype servers |
+| Privacy-opaque clouds | Bring your own API key; no libretype servers |
 | Heavy Electron apps | A single ~2.4 MB native binary |
 | Terminal paste is a pain | Auto-detects terminal vs GUI, picks the right shortcut |
 
@@ -91,8 +91,8 @@ vendor lock-in. The whole binary is ~2.4 MB and the source is MIT-licensed.
 ## How it works
 
 ```
-Ctrl+Space → voxtype CLI → SIGUSR1 → voxtype daemon (background)
-                                      ├── ffmpeg records mic → /tmp/voxtype.mp3
+Ctrl+Space → libretype CLI → SIGUSR1 → libretype daemon (background)
+                                      ├── ffmpeg records mic → /tmp/libretype.mp3
                                       └── Ctrl+Space again → Speech-to-text → clipboard → auto-paste
                                       Providers (fallback chain):
                                         1. Deepgram (nova-3)
@@ -102,13 +102,13 @@ Ctrl+Space → voxtype CLI → SIGUSR1 → voxtype daemon (background)
 
 1. You press <kbd>Ctrl</kbd>+<kbd>Space</kbd>. The CLI sends a signal to the background daemon.
 2. The daemon records your microphone with **ffmpeg** (16 kHz mono, ~64 kbps) into a temp file.
-3. You press <kbd>Ctrl</kbd>+<kbd>Space</kbd> again. The daemon stops recording and sends the audio to a speech-to-text provider. By default voxtype tries **Deepgram**, then **Mistral** (Voxtral), then **Groq** (Whisper) — whichever key(s) you have configured. The first successful response wins, so a rate limit or outage on one provider automatically falls through to the next.
+3. You press <kbd>Ctrl</kbd>+<kbd>Space</kbd> again. The daemon stops recording and sends the audio to a speech-to-text provider. By default libretype tries **Deepgram**, then **Mistral** (Voxtral), then **Groq** (Whisper) — whichever key(s) you have configured. The first successful response wins, so a rate limit or outage on one provider automatically falls through to the next.
 4. The transcribed text is copied to your clipboard and **pasted into the focused app** automatically.
-5. On Wayland, voxtype detects the focused window (Sway/Hyprland IPC) and picks the right paste shortcut — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> in terminals, <kbd>Ctrl</kbd>+<kbd>V</kbd> in browsers — verifies the clipboard is live before pasting, and falls back to a compositor-aware key sequence. XWayland windows are injected through the X11 path for speed. Every step is timeout-bounded, so a wedged tool can never block dictation. On X11, `xdotool` detects terminal vs GUI apps.
+5. On Wayland, libretype detects the focused window (Sway/Hyprland IPC) and picks the right paste shortcut — <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> in terminals, <kbd>Ctrl</kbd>+<kbd>V</kbd> in browsers — verifies the clipboard is live before pasting, and falls back to a compositor-aware key sequence. XWayland windows are injected through the X11 path for speed. Every step is timeout-bounded, so a wedged tool can never block dictation. On X11, `xdotool` detects terminal vs GUI apps.
 
-## voxtype vs Wispr Flow
+## libretype vs Wispr Flow
 
-| | **voxtype** | **Wispr Flow** |
+| | **libretype** | **Wispr Flow** |
 |---|---|---|
 | **Price** | Free (MIT license) | Paid subscription |
 | **Source** | Open source, auditable | Closed source |
@@ -119,7 +119,7 @@ Ctrl+Space → voxtype CLI → SIGUSR1 → voxtype daemon (background)
 | **Offline editing commands** | Not yet (roadmap) | Yes |
 | **Customization** | Config file, any Whisper model | Limited |
 
-voxtype does **not** yet have Wispr Flow's advanced features — voice editing
+libretype does **not** yet have Wispr Flow's advanced features — voice editing
 commands, custom vocabularies, or offline transcription. It nails the core
 loop: *press, speak, done* — everywhere, for free.
 
@@ -140,7 +140,7 @@ loop: *press, speak, done* — everywhere, for free.
 ### Option A: One-command installer (recommended)
 
 ```bash
-curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash
 ```
 
 The installer:
@@ -148,7 +148,7 @@ The installer:
 1. Detects your display server (X11 / Wayland) and compositor
 2. Installs dependencies through your package manager (apt, dnf, pacman, zypper, apk, emerge)
 3. Downloads the prebuilt binary from GitHub Releases (falls back to a source build)
-4. Writes `~/.config/voxtype/config.toml`
+4. Writes `~/.config/libretype/config.toml`
 5. Sets up autostart and binds <kbd>Ctrl</kbd>+<kbd>Space</kbd>
 6. Starts the daemon
 
@@ -156,25 +156,25 @@ Useful flags:
 
 ```bash
 # Preview everything without touching your system
-curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash -s -- --dry-run
+curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash -s -- --dry-run
 
 # Provide the API key non-interactively
-curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash -s -- --api-key gsk_xxx
+curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash -s -- --api-key gsk_xxx
 
 # Build from source instead of downloading a binary
-curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash -s -- --method source
+curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash -s -- --method source
 ```
 
 ### Option B: Build from source
 
 ```bash
-git clone https://github.com/atheerium/voxtype.git
-cd voxtype
+git clone https://github.com/atheerium/libretype.git
+cd libretype
 cargo build --release
-# Binary: target/release/voxtype
+# Binary: target/release/libretype
 ```
 
-Or directly: `cargo install --git https://github.com/atheerium/voxtype`
+Or directly: `cargo install --git https://github.com/atheerium/libretype`
 
 ### Option C: Package managers (when available)
 
@@ -188,7 +188,7 @@ fastest path.
    ```bash
    echo 'export DEEPGRAM_API_KEY="dg_..."' >> ~/.bashrc
    ```
-   You can also add `groq_api_key`, `deepgram_api_key`, and `mistral_api_key` to `~/.config/voxtype/config.toml`.
+   You can also add `groq_api_key`, `deepgram_api_key`, and `mistral_api_key` to `~/.config/libretype/config.toml`.
 3. **Press <kbd>Ctrl</kbd>+<kbd>Space</kbd>**, speak, press <kbd>Ctrl</kbd>+<kbd>Space</kbd> again. Done.
 
 Text is pasted into the focused app automatically, and is always on the
@@ -196,7 +196,7 @@ clipboard as a fallback (<kbd>Ctrl</kbd>+<kbd>V</kbd> / <kbd>Ctrl</kbd>+<kbd>Shi
 
 ## Configuration
 
-Configuration lives in `~/.config/voxtype/config.toml`:
+Configuration lives in `~/.config/libretype/config.toml`:
 
 ```toml
 # Speech-to-text API keys — at least one is required.
@@ -214,7 +214,7 @@ default_provider = "auto"          # "auto", "deepgram", "mistral", or "groq"
 **API key resolution order** (per provider): `config.toml` → corresponding env
 var (`GROQ_API_KEY` / `DEEPGRAM_API_KEY` / `MISTRAL_API_KEY`) → shell rc files.
 
-**Fallback chain:** voxtype tries providers in this order — **Deepgram →
+**Fallback chain:** libretype tries providers in this order — **Deepgram →
 Mistral → Groq** — using whichever keys you have configured. The first
 provider that returns a non-empty transcription wins. If one fails (rate limit,
 network error, 401, etc.), the error is logged and the next provider is tried.
@@ -225,9 +225,9 @@ Use `"auto"` (default) to use the full fallback chain.
 
 **CLI commands:**
 ```bash
-voxtype --help        # Show usage
-voxtype --stats       # Show provider usage statistics (calls, success rate, latency)
-voxtype --configure   # Interactive prompt to set default provider
+libretype --help        # Show usage
+libretype --stats       # Show provider usage statistics (calls, success rate, latency)
+libretype --configure   # Interactive prompt to set default provider
 ```
 
 ## Manual hotkey setup (if you skipped the installer's)
@@ -237,8 +237,8 @@ voxtype --configure   # Interactive prompt to set default provider
 
 ```ini
 # ~/.config/sway/config
-exec_always /path/to/voxtype --daemon
-bindsym Ctrl+space exec /path/to/voxtype
+exec_always /path/to/libretype --daemon
+bindsym Ctrl+space exec /path/to/libretype
 ```
 
 </details>
@@ -248,8 +248,8 @@ bindsym Ctrl+space exec /path/to/voxtype
 
 ```ini
 # ~/.config/hypr/hyprland.conf
-exec-once = /path/to/voxtype --daemon
-bind = CTRL, SPACE, exec, /path/to/voxtype
+exec-once = /path/to/libretype --daemon
+bind = CTRL, SPACE, exec, /path/to/libretype
 ```
 
 </details>
@@ -259,7 +259,7 @@ bind = CTRL, SPACE, exec, /path/to/voxtype
 
 ```bash
 xfconf-query -c xfce4-keyboard-shortcuts \
-  -p "/commands/custom/<Primary>space" -s "/path/to/voxtype" --create -t string
+  -p "/commands/custom/<Primary>space" -s "/path/to/libretype" --create -t string
 ```
 
 </details>
@@ -268,7 +268,7 @@ xfconf-query -c xfce4-keyboard-shortcuts \
 <summary><b>GNOME</b></summary>
 
 GNOME needs a custom shortcut (Settings → Keyboard → Keyboard Shortcuts → Add):
-command `/path/to/voxtype`.
+command `/path/to/libretype`.
 
 </details>
 
@@ -276,7 +276,7 @@ command `/path/to/voxtype`.
 <summary><b>KDE Plasma</b></summary>
 
 Add a custom shortcut in System Settings → Shortcuts → Add New → Global
-Shortcut → Command/URL, command `/path/to/voxtype`.
+Shortcut → Command/URL, command `/path/to/libretype`.
 
 </details>
 
@@ -285,18 +285,18 @@ Shortcut → Command/URL, command `/path/to/voxtype`.
 | Symptom | Fix |
 |---|---|
 | "Pasted N chars ✓" but nothing appears | The app's paste shortcut differs. Use <kbd>Ctrl</kbd>+<kbd>V</kbd> or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> manually; text is always on the clipboard |
-| HTTP 401 | Invalid API key — check `~/.config/voxtype/config.toml` or `$GROQ_API_KEY` |
+| HTTP 401 | Invalid API key — check `~/.config/libretype/config.toml` or `$GROQ_API_KEY` |
 | HTTP 413 | Audio too large — speak for a shorter duration |
 | HTTP 429 | Rate limited — wait and retry |
 | "No audio recorded" | Microphone not selected; test: `ffmpeg -f pulse -i default -ac 1 -ar 16000 -t 3 /tmp/test.mp3` |
 | "Audio file too small" | Recording too brief (< ~500 ms) |
 | Wayland socket not found | Check `WAYLAND_DISPLAY`; restart your compositor session |
-| Daemon not responding | `kill $(cat /tmp/voxtype.pid)` then run `voxtype --daemon` |
-| See everything | `tail -f ~/.local/share/voxtype/daemon.log` |
+| Daemon not responding | `kill $(cat /tmp/libretype.pid)` then run `libretype --daemon` |
+| See everything | `tail -f ~/.local/share/libretype/daemon.log` |
 
 ## Privacy & security
 
-- **No voxtype servers.** The daemon runs entirely on your machine. Audio goes
+- **No libretype servers.** The daemon runs entirely on your machine. Audio goes
   directly to the transcription provider you configure (Groq by default).
 - **Your API key stays local** (in `config.toml` or your shell env).
 - **No telemetry, no analytics, no phone-home.** The only network call is the
@@ -307,28 +307,28 @@ Shortcut → Command/URL, command `/path/to/voxtype`.
 
 ## FAQ
 
-**What is voxtype?**
-voxtype is a free, open-source voice-to-text dictation tool for Linux. Press a
+**What is libretype?**
+libretype is a free, open-source voice-to-text dictation tool for Linux. Press a
 hotkey, speak, and your words are typed into the focused application via
 Whisper transcription.
 
-**How is voxtype different from Wispr Flow?**
+**How is libretype different from Wispr Flow?**
 Wispr Flow is a popular closed-source, subscription-based dictation app that
-does not support Linux. voxtype is its free, open-source, MIT-licensed
+does not support Linux. libretype is its free, open-source, MIT-licensed
 alternative built for Linux (X11 and Wayland). It has no subscription, no
 account, and no vendor cloud.
 
-**Does voxtype work on Wayland?**
-Yes. voxtype auto-detects Wayland and adapts its paste strategy per compositor
+**Does libretype work on Wayland?**
+Yes. libretype auto-detects Wayland and adapts its paste strategy per compositor
 (Sway, Hyprland, KDE, GNOME), using `wtype` plus the clipboard.
 
-**Does voxtype work on X11?**
+**Does libretype work on X11?**
 Yes — XFCE, GNOME X11, i3, and any X11 window manager. It detects terminal vs
 GUI windows and uses the correct paste shortcut.
 
-**Which speech-to-text model does voxtype use?**
+**Which speech-to-text model does libretype use?**
 
-voxtype uses a fallback chain across three providers, trying them in order:
+libretype uses a fallback chain across three providers, trying them in order:
 1. **Deepgram** (`nova-3`) — primary provider
 2. **Mistral** (`voxtral-mini-latest` / Voxtral) — fallback
 3. **Groq** (`whisper-large-v3-turbo` by default) — final fallback, configurable via `model` config option
@@ -341,7 +341,7 @@ maximum reliability against rate limits.
 **Is my audio private?**
 
 Your audio is sent only to the transcription provider you configure. There is
-no voxtype cloud, no telemetry, and no analytics.
+no libretype cloud, no telemetry, and no analytics.
 
 **Can I use another transcription provider?**
 
@@ -352,24 +352,24 @@ is a small change — contributions welcome.
 
 Deepgram and Groq typically return results in under a couple of seconds for short
 recordings; the whole loop is usually well under 5 seconds. The fallback chain
-adds latency only if a provider fails and voxtype must try the next one.
+adds latency only if a provider fails and libretype must try the next one.
 
 **Paste is slow or nothing appears in the focused app — what should I check?**
-voxtype bounds every paste step, so injection itself never blocks for more than
+libretype bounds every paste step, so injection itself never blocks for more than
 a few seconds; if text does not appear, the clipboard is still set for a manual
 paste. On Sway 1.9 (and some other wlroots versions) there is a compositor bug:
-`zwp_virtual_keyboard_v1` input — what `wtype` and voxtype's native injector
+`zwp_virtual_keyboard_v1` input — what `wtype` and libretype's native injector
 use — is silently dropped for **native Wayland** windows, while **XWayland**
-windows still receive it. This is not a voxtype defect (verified with wtype and
+windows still receive it. This is not a libretype defect (verified with wtype and
 a from-scratch client sending a correct full keymap in both keycode spaces).
-voxtype already routes XWayland windows through the X11 injector, which works
+libretype already routes XWayland windows through the X11 injector, which works
 reliably. For native Wayland apps on an affected compositor, either upgrade
 `sway`, run the app under XWayland (e.g. Chrome with `--ozone-platform=x11`),
 or use `ydotool`.
 
 **I use native-Wayland Chrome — is there any working injection path on Sway?**
 One verified mechanism is the input-method protocol (`zwp_input_method_v2`):
-voxtype can commit the dictation text directly into the focused field via
+libretype can commit the dictation text directly into the focused field via
 `commit_string`, bypassing both the clipboard and key injection. On Sway 1.9
 this path was verified working end-to-end for GTK apps (text inserted into an
 entry field), and Chrome enables text-input-v3 (the IM activates), so
@@ -377,7 +377,7 @@ dictation via this path is worth testing on your machine. Two caveats:
 terminals (foot, alacritty) activate the IM but do not render `commit_string`,
 so they still rely on the paste shortcut; and Chromium's Wayland IME support
 has known compositor-specific quirks. This backend is not yet integrated into
-voxtype — it is a candidate for a future opt-in.
+libretype — it is a candidate for a future opt-in.
 
 ## Roadmap
 
@@ -389,7 +389,7 @@ voxtype — it is a candidate for a future opt-in.
 
 ## Support & Donations
 
-voxtype is free and always will be, made by [Atheerium](https://atheerium.com).
+libretype is free and always will be, made by [Atheerium](https://atheerium.com).
 If it saves you time, consider supporting the work:
 
 - ☕ [Buy me a coffee on Ko-fi](https://ko-fi.com/atheerium)
@@ -413,8 +413,8 @@ Contributions are welcome — code, docs, packaging, translations. See
 
 <p align="center">
   Made with 💚 by <a href="https://atheerium.com">Atheerium</a> for Linux users who'd rather speak than type.<br>
-  <a href="https://ko-fi.com/atheerium">☕ Support voxtype on Ko-fi</a> · <a href="https://atheerium.com">atheerium.com</a><br>
-  Found this useful? <a href="https://github.com/atheerium/voxtype">⭐ Star voxtype on GitHub</a> — it helps more people discover free dictation.
+  <a href="https://ko-fi.com/atheerium">☕ Support libretype on Ko-fi</a> · <a href="https://atheerium.com">atheerium.com</a><br>
+  Found this useful? <a href="https://github.com/atheerium/libretype">⭐ Star libretype on GitHub</a> — it helps more people discover free dictation.
 </p>
 
 ---

@@ -119,7 +119,7 @@ pub fn check_display_env(env: DesktopEnv) -> Result<()> {
         DesktopEnv::X11 => {
             let display = std::env::var("DISPLAY").map_err(|_| {
                 anyhow::anyhow!(
-                    "DISPLAY is not set. voxtype needs an X11 display.\n\
+                    "DISPLAY is not set. libretype needs an X11 display.\n\
                      Make sure you're running this from within an X session.\n\
                      If using Wayland, set backend = \"wayland\" in config.toml."
                 )
@@ -131,7 +131,7 @@ pub fn check_display_env(env: DesktopEnv) -> Result<()> {
         DesktopEnv::Wayland => {
             let wl = std::env::var("WAYLAND_DISPLAY").map_err(|_| {
                 anyhow::anyhow!(
-                    "WAYLAND_DISPLAY is not set. voxtype needs a Wayland compositor.\n\
+                    "WAYLAND_DISPLAY is not set. libretype needs a Wayland compositor.\n\
                      Make sure you're running this from within a Wayland session.\n\
                      If using X11, set backend = \"x11\" in config.toml."
                 )
@@ -197,7 +197,7 @@ pub fn process_alive(pid: u32) -> bool {
 
 fn log_path() -> Result<PathBuf> {
     let data_dir = dirs::data_dir().context("Cannot determine data directory")?;
-    let dir = data_dir.join("voxtype");
+    let dir = data_dir.join("libretype");
     let _ = fs::create_dir_all(&dir);
     Ok(dir.join("daemon.log"))
 }
@@ -374,7 +374,7 @@ fn validate_deps() -> Vec<String> {
 /// when no notification daemon is installed).
 fn notify(summary: &str, body: &str) {
     let mut cmd = Command::new("notify-send");
-    cmd.args(["-a", "voxtype", summary, body]);
+    cmd.args(["-a", "libretype", summary, body]);
     let sent = matches!(
         run_limited(&mut cmd, NOTIFY_TIMEOUT),
         CommandOutcome::Completed(o) if o.status.success()
@@ -382,7 +382,7 @@ fn notify(summary: &str, body: &str) {
 
     if !sent {
         // Fallback: write to stderr so users launching from terminal see it
-        eprintln!("[voxtype] {}: {}", summary, body);
+        eprintln!("[libretype] {}: {}", summary, body);
     }
 }
 
@@ -449,7 +449,7 @@ pub async fn run_daemon() -> Result<()> {
             "WARNING: No audio system detected (pactl/pipewire not found). Recording will fail.",
         );
         eprintln!(
-            "voxtype WARNING: No audio system detected. Install pulseaudio-utils or pipewire."
+            "libretype WARNING: No audio system detected. Install pulseaudio-utils or pipewire."
         );
     } else {
         write_log(&format!("Audio system: {:?}", audio));
@@ -464,14 +464,14 @@ pub async fn run_daemon() -> Result<()> {
             deps_install_hint(effective_env())
         );
         write_log(&msg);
-        eprintln!("voxtype: {}", msg);
+        eprintln!("libretype: {}", msg);
     }
 
     // Log display env is healthy
     let env_check = check_display_env(env);
     if let Err(e) = env_check {
         write_log(&format!("WARNING: {}", e));
-        eprintln!("voxtype WARNING: {}", e);
+        eprintln!("libretype WARNING: {}", e);
     }
 
     // Signal handlers were registered before startup checks; see above.
@@ -554,29 +554,29 @@ async fn toggle() {
     };
 
     if is_recording() {
-        notify("voxtype", "Transcribing...");
+        notify("libretype", "Transcribing...");
         match stop_and_transcribe().await {
             Ok(text) => {
                 write_log(&format!("Transcribed and injected: {} chars", text.len()));
                 let msg = format!("Pasted {} chars ✓", text.len());
-                notify("voxtype", &msg);
+                notify("libretype", &msg);
             }
             Err(e) => {
                 let msg = format!("{}", e);
                 write_log(&format!("Transcription/paste failed: {}", msg));
-                notify("voxtype", &msg);
+                notify("libretype", &msg);
             }
         }
     } else {
         match start_recording() {
             Ok(()) => {
                 write_log("Recording started");
-                notify("voxtype", "Recording...");
+                notify("libretype", "Recording...");
             }
             Err(e) => {
                 let msg = format!("Recording failed: {}", e);
                 write_log(&msg);
-                notify("voxtype", &msg);
+                notify("libretype", &msg);
             }
         }
     }
@@ -889,7 +889,7 @@ async fn transcribe_deepgram(api_key: String) -> Result<String> {
 
     if !status.is_success() {
         let hint = match status.as_u16() {
-            401 => "\nHint: Your DEEPGRAM_API_KEY is invalid. Check ~/.config/voxtype/config.toml or your shell rc file.",
+            401 => "\nHint: Your DEEPGRAM_API_KEY is invalid. Check ~/.config/libretype/config.toml or your shell rc file.",
             403 | 429 => "\nHint: Deepgram rate limit or quota exceeded. Falling back to next provider.",
             413 => "\nHint: Audio file too large for Deepgram's API limit.",
             _ => "",
@@ -944,7 +944,7 @@ async fn transcribe_mistral(api_key: &str, config: &Config) -> Result<String> {
 
     if !status.is_success() {
         let hint = match status.as_u16() {
-            401 => "\nHint: Your MISTRAL_API_KEY is invalid. Check ~/.config/voxtype/config.toml or your shell rc file.",
+            401 => "\nHint: Your MISTRAL_API_KEY is invalid. Check ~/.config/libretype/config.toml or your shell rc file.",
             402 | 429 => "\nHint: Mistral rate limit exceeded. Falling back to next provider.",
             413 => "\nHint: Audio file too large for Mistral's API limit.",
             _ => "",
@@ -1000,7 +1000,7 @@ async fn transcribe_groq(api_key: &str, config: &Config) -> Result<String> {
 
     if !status.is_success() {
         let hint = match status.as_u16() {
-            401 => "\nHint: Your GROQ_API_KEY is invalid. Check ~/.config/voxtype/config.toml or your shell rc file.",
+            401 => "\nHint: Your GROQ_API_KEY is invalid. Check ~/.config/libretype/config.toml or your shell rc file.",
             402 | 429 => "\nHint: Groq rate limit exceeded. Wait a moment and try again.",
             413 => "\nHint: Audio file too large for Groq's API limit.",
             _ => "",
@@ -2080,7 +2080,7 @@ mod tests {
     fn notify_bounded_when_daemon_hangs() {
         use std::os::unix::fs::PermissionsExt;
 
-        let fake_dir = format!("/tmp/voxtype-fake-bin-{}", std::process::id());
+        let fake_dir = format!("/tmp/libretype-fake-bin-{}", std::process::id());
         let _ = std::fs::create_dir_all(&fake_dir);
         let fake = format!("{}/notify-send", fake_dir);
         std::fs::write(&fake, "#!/bin/sh\nexec sleep 30\n").unwrap();
@@ -2089,7 +2089,7 @@ mod tests {
         let orig_path = std::env::var("PATH").unwrap_or_default();
         std::env::set_var("PATH", format!("{}:{}", fake_dir, orig_path));
         let t0 = std::time::Instant::now();
-        notify("voxtype test", "bounded");
+        notify("libretype test", "bounded");
         let elapsed = t0.elapsed();
         let _ = std::fs::remove_dir_all(&fake_dir);
         std::env::set_var("PATH", orig_path);
@@ -2227,7 +2227,7 @@ mod tests {
     ///
     /// Two supported targets, pick one and focus it:
     ///   1. Native Wayland terminal (foot): pastes text into a file.
-    ///      swaymsg 'exec foot sh -c "cat > /tmp/voxtype-paste-smoke.txt"'
+    ///      swaymsg 'exec foot sh -c "cat > /tmp/libretype-paste-smoke.txt"'
     ///   2. XWayland event tester (xev): verifies the X11 fallback path.
     ///      swaymsg 'exec sh -c "xev > /tmp/xev.log 2>&1"'
     ///
@@ -2251,7 +2251,7 @@ mod tests {
             panic!("live smoke test requires Sway on Wayland");
         }
 
-        let marker = format!("voxtype smoke test {}", std::process::id());
+        let marker = format!("libretype smoke test {}", std::process::id());
         let target =
             detect_focus_target(WaylandCompositor::Sway).expect("no focused window detected");
         let is_foot = target.id.as_deref() == Some("foot");
@@ -2265,9 +2265,9 @@ mod tests {
         inject_text_wayland(&marker).expect("inject_text_wayland failed");
 
         if is_foot {
-            // The scratch terminal runs `cat > /tmp/voxtype-paste-smoke.txt`;
+            // The scratch terminal runs `cat > /tmp/libretype-paste-smoke.txt`;
             // the pasted text must land there.
-            let path = "/tmp/voxtype-paste-smoke.txt";
+            let path = "/tmp/libretype-paste-smoke.txt";
             for _ in 0..50 {
                 if let Ok(mut f) = std::fs::File::open(path) {
                     let mut s = String::new();
@@ -2322,7 +2322,7 @@ mod tests {
             panic!("bounded smoke test requires Wayland");
         }
 
-        let fake_dir = format!("/tmp/voxtype-fake-bin-{}", std::process::id());
+        let fake_dir = format!("/tmp/libretype-fake-bin-{}", std::process::id());
         let _ = std::fs::create_dir_all(&fake_dir);
         let fake_wtype = format!("{}/wtype", fake_dir);
         std::fs::write(&fake_wtype, "#!/bin/sh\nexec sleep 30\n").unwrap();
@@ -2375,11 +2375,11 @@ mod tests {
             panic!("xwayland e2e test requires zenity and xdotool");
         }
 
-        let out_path = format!("/tmp/voxtype-e2e-{}.txt", std::process::id());
+        let out_path = format!("/tmp/libretype-e2e-{}.txt", std::process::id());
         let out_file = std::fs::File::create(&out_path).unwrap();
         let mut zenity = Command::new("zenity")
             .env("GDK_BACKEND", "x11")
-            .args(["--entry", "--title", "voxtype-e2e"])
+            .args(["--entry", "--title", "libretype-e2e"])
             .stdout(std::process::Stdio::from(out_file))
             .stderr(std::process::Stdio::null())
             .spawn()
@@ -2388,7 +2388,7 @@ mod tests {
         // Focus the dialog and confirm it is the focused XWayland window.
         std::thread::sleep(Duration::from_millis(1500));
         let _ = Command::new("swaymsg")
-            .args(["[title=voxtype-e2e]", "focus"])
+            .args(["[title=libretype-e2e]", "focus"])
             .output();
         std::thread::sleep(Duration::from_millis(300));
         let target =
@@ -2399,7 +2399,7 @@ mod tests {
             target
         );
 
-        let marker = format!("voxtype e2e marker {}", std::process::id());
+        let marker = format!("libretype e2e marker {}", std::process::id());
         inject_text_wayland(&marker).expect("inject_text_wayland failed");
 
         // Press Return in the dialog: the default button confirms and zenity

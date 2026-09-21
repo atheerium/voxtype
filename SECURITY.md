@@ -5,10 +5,10 @@
 Please **do not** open a public issue for security vulnerabilities. Instead,
 report them privately via GitHub's Security Advisories:
 
-<https://github.com/atheerium/voxtype/security/advisories/new>
+<https://github.com/atheerium/libretype/security/advisories/new>
 
 You can also email the maintainers directly (see the repository's
-`AUTHORS`/commit history for contact details) — voxtype is maintained by
+`AUTHORS`/commit history for contact details) — libretype is maintained by
 [Atheerium](https://atheerium.com).
 
 We aim to acknowledge reports within **48 hours** and to ship a fix as soon as
@@ -19,9 +19,9 @@ practically possible. Please include:
 - Steps to reproduce (if possible)
 - Any suggested fix
 
-## Security properties of voxtype
+## Security properties of libretype
 
-- **No remote code.** voxtype runs entirely locally; the only network call is
+- **No remote code.** libretype runs entirely locally; the only network call is
   the audio transcription request to the provider you configure.
 - **No telemetry or analytics.**
 - **Secrets stay local.** The Groq API key is read from your config file or

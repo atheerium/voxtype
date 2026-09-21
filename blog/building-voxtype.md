@@ -1,4 +1,4 @@
-# Building voxtype: A Free, Open-Source Voice Dictation Tool for Linux
+# Building libretype: A Free, Open-Source Voice Dictation Tool for Linux
 
 *August 25, 2026 · Atheerium*
 
@@ -6,13 +6,13 @@
 
 ## TL;DR
 
-I built **voxtype** — a free, open-source voice-to-text dictation tool for Linux that types your spoken words into any application. Press `Ctrl+Space`, speak, press `Ctrl+Space` again, and your words appear. It's MIT-licensed, the whole binary is ~2.4 MB, and there are zero accounts, subscriptions, or vendor clouds involved.
+I built **libretype** — a free, open-source voice-to-text dictation tool for Linux that types your spoken words into any application. Press `Ctrl+Space`, speak, press `Ctrl+Space` again, and your words appear. It's MIT-licensed, the whole binary is ~2.4 MB, and there are zero accounts, subscriptions, or vendor clouds involved.
 
-[voxtype on GitHub](https://github.com/atheerium/voxtype) | [Install in one command](https://github.com/atheerium/voxtype#install-in-one-command)
+[libretype on GitHub](https://github.com/atheerium/libretype) | [Install in one command](https://github.com/atheerium/libretype#install-in-one-command)
 
 ---
 
-## Why I built voxtype
+## Why I built libretype
 
 Voice dictation on Linux has a problem: the best tool, **Wispr Flow**, is macOS/Windows-only and subscription-based. On Linux, you're stuck with either expensive cloud services, complicated local setups, or nothing at all.
 
@@ -23,24 +23,24 @@ I wanted something that:
 - Sends audio only to the provider you choose
 - Is a tiny native binary, not an Electron app
 
-So I built voxtype. Here's what it looks like:
+So I built libretype. Here's what it looks like:
 
 ```
-Ctrl+Space → voxtype CLI → SIGUSR1 → voxtype daemon (background)
-                                      ├── ffmpeg records mic → /tmp/voxtype.mp3
+Ctrl+Space → libretype CLI → SIGUSR1 → libretype daemon (background)
+                                      ├── ffmpeg records mic → /tmp/libretype.mp3
                                       └── Ctrl+Space again → Groq API → clipboard → auto-paste
 ```
 
 ## Architecture
 
-voxtype is built around a background daemon pattern:
+libretype is built around a background daemon pattern:
 
 1. **Hotkey listener (CLI):** A lightweight binary that, when triggered, signals the daemon via `SIGUSR1`.
 2. **Audio recording:** The daemon uses `ffmpeg` to record your microphone into a temp file at 16kHz mono.
 3. **Transcription:** Audio is sent to Groq's Whisper API (configurable — any OpenAI-compatible endpoint works).
 4. **Text output:** The transcribed text is copied to the clipboard and pasted into the focused application.
 
-The daemon pattern means voxtype uses near-zero resources when idle — no always-listening process, no background CPU usage.
+The daemon pattern means libretype uses near-zero resources when idle — no always-listening process, no background CPU usage.
 
 ### X11 vs Wayland: the paste problem
 
@@ -50,7 +50,7 @@ On **X11**, you can use `xdotool` to simulate keyboard input or paste from clipb
 
 On **Wayland**, clipboard access is mediated by the compositor. You need `wl-clipboard` for clipboard operations and `wtype` for keyboard simulation. Each compositor (Sway, Hyprland, KDE, GNOME) has different paste shortcuts.
 
-voxtype auto-detects your environment and picks the right paste strategy. Here's a simplified view of the paste-key selection logic:
+libretype auto-detects your environment and picks the right paste strategy. Here's a simplified view of the paste-key selection logic:
 
 ```rust
 pub fn paste_keys_for_known_targets(target: &WmClass) -> Vec<KeyCombo> {
@@ -67,7 +67,7 @@ pub fn paste_keys_for_known_targets(target: &WmClass) -> Vec<KeyCombo> {
 
 One frustration with voice dictation tools is rate limits. If your primary transcription provider throttles you, dictation just... stops.
 
-voxtype implements a **provider fallback chain**: Deepgram → Mistral → Groq. Each provider is tried in order, and the results are cached so the next transcription uses the fastest provider first.
+libretype implements a **provider fallback chain**: Deepgram → Mistral → Groq. Each provider is tried in order, and the results are cached so the next transcription uses the fastest provider first.
 
 The stats module tracks per-provider latency and reliability, and promotes winners:
 
@@ -94,7 +94,7 @@ pub fn rank_providers(stats: &ProviderStats) -> Vec<String> {
 
 ### Why Whisper via API instead of local models?
 
-Whisper models are large (700 MB for large-v3) and require a GPU or significant CPU time to transcribe. By using the API (Groq's Whisper endpoint), voxtype:
+Whisper models are large (700 MB for large-v3) and require a GPU or significant CPU time to transcribe. By using the API (Groq's Whisper endpoint), libretype:
 - Has a 2.4 MB binary (no model weights bundled)
 - Transcribes in under 2 seconds
 - Costs pennies per use (Groq's free tier is 1,000+ hours/month)
@@ -103,9 +103,9 @@ The roadmap includes offline transcription via `whisper.cpp` for users who want 
 
 ### The config resolution chain
 
-voxtype resolves settings in a specific order:
+libretype resolves settings in a specific order:
 
-1. `config.toml` file (`~/.config/voxtype/config.toml`)
+1. `config.toml` file (`~/.config/libretype/config.toml`)
 2. `GROQ_API_KEY` environment variable
 3. Shell rc files (`.bashrc`, `.zshrc`, etc.)
 
@@ -115,7 +115,7 @@ This follows the principle of least surprise — you set your API key once durin
 
 1. **Wayland is still fragmented.** Each compositor has its own quirks. Auto-detection works ~80% of the time. The other 20% hits the troubleshooting guide.
 
-2. **Process hygiene matters for daemons.** voxtype stores its PID in `/tmp/voxtype.pid`, verifies PIDs against `/proc` before killing orphans, and cleans up its own lock/audio/temp files on exit. This prevented several "daemon not responding" bugs during development.
+2. **Process hygiene matters for daemons.** libretype stores its PID in `/tmp/libretype.pid`, verifies PIDs against `/proc` before killing orphans, and cleans up its own lock/audio/temp files on exit. This prevented several "daemon not responding" bugs during development.
 
 3. **The `exclude` list in Cargo.toml matters for crates.io.** My first publish attempt included 50 MB of `.cargo-cache` and `.github` workflows. Fixed by adding them to the exclude list:
 
@@ -136,12 +136,12 @@ This follows the principle of least surprise — you set your API key once durin
 ## Try it
 
 ```bash
-curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash
 # Set your Groq API key (free at console.groq.com)
 # Press Ctrl+Space, speak, press Ctrl+Space again. Done.
 ```
 
-Contributions welcome — the project is [MIT-licensed](https://github.com/atheerium/voxtype/blob/main/LICENSE) and I'm actively looking for help with Wayland integration testing, packaging, and provider abstraction. See [CONTRIBUTING.md](https://github.com/atheerium/voxtype/blob/main/CONTRIBUTING.md) for the workflow.
+Contributions welcome — the project is [MIT-licensed](https://github.com/atheerium/libretype/blob/main/LICENSE) and I'm actively looking for help with Wayland integration testing, packaging, and provider abstraction. See [CONTRIBUTING.md](https://github.com/atheerium/libretype/blob/main/CONTRIBUTING.md) for the workflow.
 
 ---
 

@@ -125,14 +125,14 @@ fn resolve_key(file_value: &Option<String>, env_var: &str, provider: &str) -> Re
 
 fn config_path() -> Result<PathBuf> {
     let config_dir = dirs::config_dir().context("Cannot determine config directory")?;
-    // auto-migration from old ~/.config/voxtype/config.toml
+    // auto-migration from old ~/.config/libretype/config.toml
     let new_path = config_dir.join("libretype").join("config.toml");
     if new_path.parent().unwrap().exists() {
         return Ok(new_path);
     }
-    let old_path = config_dir.join("voxtype").join("config.toml");
+    let old_path = config_dir.join("libretype").join("config.toml");
     if old_path.exists() {
-        eprintln!("\n[libretype] Config migration: ~/.config/voxtype/config.toml detected.\n");
+        eprintln!("\n[libretype] Config migration: ~/.config/libretype/config.toml detected.\n");
         eprintln!("Copy to ~/.config/libretype/config.toml and press Ctrl+Space to start the daemon.\n");
         return Ok(old_path);
     }
@@ -261,7 +261,7 @@ mod tests {
         // user's shell rc files leak a real key in. Point HOME at an empty
         // dir so this test is deterministic on any machine.
         let empty_home =
-            std::env::temp_dir().join(format!("voxtype-test-home-{}", std::process::id()));
+            std::env::temp_dir().join(format!("libretype-test-home-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&empty_home);
         let original_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", &empty_home);
