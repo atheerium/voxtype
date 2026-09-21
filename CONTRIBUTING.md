@@ -1,15 +1,15 @@
-# Contributing to voxtype
+# Contributing to libretype
 
 Thanks for helping make free, open-source dictation better for Linux users!
-voxtype is made by [Atheerium](https://atheerium.com) ([Ko-fi](https://ko-fi.com/atheerium)).
+libretype is made by [Atheerium](https://atheerium.com) ([Ko-fi](https://ko-fi.com/atheerium)).
 All types of contributions are welcome: code, docs, packaging, translations,
 bug reports, and feature ideas.
 
 ## Quick start
 
 ```bash
-git clone https://github.com/atheerium/voxtype.git
-cd voxtype
+git clone https://github.com/atheerium/libretype.git
+cd libretype
 cargo build --release
 cargo test
 ```
@@ -53,9 +53,9 @@ cargo test
 
 ## Reporting issues
 
-Include: your distro, display server (X11/Wayland) and compositor, voxtype
-version (`voxtype --version` if supported), and the relevant lines from
-`~/.local/share/voxtype/daemon.log`.
+Include: your distro, display server (X11/Wayland) and compositor, libretype
+version (`libretype --version` if supported), and the relevant lines from
+`~/.local/share/libretype/daemon.log`.
 
 ## License
 

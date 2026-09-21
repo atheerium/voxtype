@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a problem with voxtype
+description: Report a problem with libretype
 labels: [bug]
 body:
   - type: textarea
@@ -29,13 +29,13 @@ body:
   - type: input
     id: version
     attributes:
-      label: voxtype version
+      label: libretype version
       description: git tag, commit, or "built from source"
   - type: textarea
     id: log
     attributes:
       label: Daemon log
-      description: Paste the relevant lines from ~/.local/share/voxtype/daemon.log
+      description: Paste the relevant lines from ~/.local/share/libretype/daemon.log
       render: shell
   - type: textarea
     id: repro
