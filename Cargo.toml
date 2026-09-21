@@ -1,6 +1,6 @@
 [package]
-name = "voxtype"
-version = "0.1.1"
+name = "libretype"
+version = "0.2.0"
 edition = "2021"
 description = "Free, open-source voice-to-text dictation for Linux. Press Ctrl+Space, speak, and your words are typed into any app. A privacy-friendly, self-hostable alternative to Wispr Flow."
 license = "MIT"
@@ -26,7 +26,7 @@ exclude = [
 ]
 
 [[bin]]
-name = "voxtype"
+name = "libretype"
 path = "src/main.rs"
 
 [dependencies]

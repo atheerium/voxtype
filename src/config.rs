@@ -125,7 +125,18 @@ fn resolve_key(file_value: &Option<String>, env_var: &str, provider: &str) -> Re
 
 fn config_path() -> Result<PathBuf> {
     let config_dir = dirs::config_dir().context("Cannot determine config directory")?;
-    Ok(config_dir.join("voxtype").join("config.toml"))
+    // auto-migration from old ~/.config/voxtype/config.toml
+    let new_path = config_dir.join("libretype").join("config.toml");
+    if new_path.parent().unwrap().exists() {
+        return Ok(new_path);
+    }
+    let old_path = config_dir.join("voxtype").join("config.toml");
+    if old_path.exists() {
+        eprintln!("\n[libretype] Config migration: ~/.config/voxtype/config.toml detected.\n");
+        eprintln!("Copy to ~/.config/libretype/config.toml and press Ctrl+Space to start the daemon.\n");
+        return Ok(old_path);
+    }
+    Ok(new_path)
 }
 
 #[cfg(test)]

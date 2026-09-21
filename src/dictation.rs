@@ -170,9 +170,9 @@ pub fn check_display_env(env: DesktopEnv) -> Result<()> {
 
 // ── File paths ────────────────────────────────────────────────────
 
-const PIDFILE: &str = "/tmp/voxtype.pid";
-const LOCKFILE: &str = "/tmp/voxtype.lock";
-const AUDIO_FILE: &str = "/tmp/voxtype.mp3";
+const PIDFILE: &str = "/tmp/libretype.pid";
+const LOCKFILE: &str = "/tmp/libretype.lock";
+const AUDIO_FILE: &str = "/tmp/libretype.mp3";
 
 /// True if a live process owns the daemon PID file.
 pub fn daemon_running() -> bool {

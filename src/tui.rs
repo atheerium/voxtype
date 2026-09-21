@@ -10,7 +10,7 @@ pub fn run_configure() -> Result<()> {
     let providers = ["auto", "deepgram", "mistral", "groq"];
     let current = config.default_provider();
 
-    println!("voxtype — configure default speech provider\n");
+    println!("libretype — configure default speech provider\\n");
 
     println!("Current default: {}", current);
     println!();
@@ -144,6 +144,6 @@ pub fn run_configure() -> Result<()> {
     cfg.save()?;
 
     println!("\nDefault provider set to: {}", selected);
-    println!("Config saved to ~/.config/voxtype/config.toml");
+    println!("Config saved to ~/.config/libretype/config.toml");
     Ok(())
 }

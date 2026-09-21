@@ -37,7 +37,7 @@ fn send_signal(signal: &str, pid: u32) -> Result<()> {
         // kill exits non-zero when the process is gone; give the user
         // feedback instead of silently swallowing the failed toggle.
         anyhow::bail!(
-            "Failed to send {} to daemon (pid {}). Is voxtype still running?",
+            "Failed to send {} to daemon (pid {}). Is libretype still running?",
             signal,
             pid
         );
@@ -53,22 +53,22 @@ async fn main() -> Result<()> {
         // Print help
         Some("--help") | Some("-h") => {
             println!(
-                "voxtype {} — voice-to-text dictation for Linux\n",
+                "libretype {} — voice-to-text dictation for Linux\\n",
                 env!("CARGO_PKG_VERSION")
             );
             println!("USAGE:");
-            println!("  voxtype            Toggle recording (Ctrl+Space via daemon)");
-            println!("  voxtype --daemon   Start daemon in background");
-            println!("  voxtype --restart  Restart daemon (picks up new binary)");
-            println!("  voxtype --stats    Show provider usage statistics");
-            println!("  voxtype --configure  Interactively set default STT provider");
-            println!("  voxtype --version  Print version");
+            println!("  libretype            Toggle recording (Ctrl+Space via daemon)");
+            println!("  libretype --daemon   Start daemon in background");
+            println!("  libretype --restart  Restart daemon (picks up new binary)");
+            println!("  libretype --stats    Show provider usage statistics");
+            println!("  libretype --configure  Interactively set default STT provider");
+            println!("  libretype --version  Print version");
             return Ok(());
         }
 
         // Print version and exit
         Some("--version") | Some("-V") => {
-            println!("voxtype {}", env!("CARGO_PKG_VERSION"));
+            println!("libretype {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
 

@@ -105,7 +105,7 @@ impl Stats {
 
     /// Print a summary table of all providers.
     pub fn print_table(&self) {
-        println!("voxtype provider statistics\n");
+        println!("libretype provider statistics\\n");
 
         let mut rows: Vec<(&String, &ProviderStats)> = self.providers.iter().collect();
         rows.sort_by_key(|b| std::cmp::Reverse(b.1.calls));

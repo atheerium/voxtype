@@ -46,10 +46,10 @@ jobs:
       - name: Package
         run: |
           set -euo pipefail
-          ASSET="voxtype-${{ matrix.target }}"
+          ASSET="libretype-${{ matrix.target }}"
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/voxtype" "dist/voxtype"
-          tar -czf "dist/${ASSET}.tar.gz" -C dist voxtype
+          cp "target/${{ matrix.target }}/release/libretype" "dist/libretype"
+          tar -czf "dist/${ASSET}.tar.gz" -C dist libretype
           cd dist
           sha256sum "${ASSET}.tar.gz" >> sha256sums.txt
           rm -f voxtype
@@ -75,7 +75,7 @@ jobs:
           merge-multiple: true
 
       # Ship install.sh as a release asset too, so the one-liner
-      # https://github.com/atheerium/voxtype/releases/latest/download/install.sh
+      # https://github.com/atheerium/libretype/releases/latest/download/install.sh
       # is served by GitHub's fast object CDN instead of the laggy raw CDN.
       - name: Stage installer
         run: cp install.sh artifacts/install.sh
@@ -87,5 +87,5 @@ jobs:
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" artifacts/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "voxtype $GITHUB_REF_NAME" \
+            --title "libretype $GITHUB_REF_NAME" \
             --generate-notes

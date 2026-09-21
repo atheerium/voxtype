@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# voxtype installer — one-command setup for voice-to-text dictation on Linux.
+# libretype installer — one-command setup for voice-to-text dictation on Linux.
 # Made by Atheerium (https://atheerium.com · https://ko-fi.com/atheerium)
 #
-#   curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
+#   curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash
 #
 # What it does:
 #   1. Detects your display server (X11 / Wayland) and compositor
 #   2. Installs runtime dependencies via your package manager
-#   3. Installs the voxtype binary (GitHub release, falls back to source build)
-#   4. Writes ~/.config/voxtype/config.toml (API key from $GROQ_API_KEY)
+#   3. Installs the libretype binary (GitHub release, falls back to source build)
+#   4. Writes ~/.config/libretype/config.toml (API key from $GROQ_API_KEY)
 #   5. Sets up autostart for the background daemon
 #   6. Binds Ctrl+Space as the dictation hotkey
 #   7. Starts the daemon so you can use it immediately
@@ -38,16 +38,16 @@ set -euo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 
-REPO="atheerium/voxtype"
+REPO="atheerium/libretype"
 REPO_URL="https://github.com/${REPO}"
 API_URL="https://api.github.com/repos/${REPO}"
 
 PREFIX="${PREFIX:-$HOME/.local}"
 BIN_DIR="${PREFIX}/bin"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/voxtype"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/libretype"
 CONFIG_FILE="${CONFIG_DIR}/config.toml"
 AUTOSTART_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
-AUTOSTART_FILE="${AUTOSTART_DIR}/voxtype.desktop"
+AUTOSTART_FILE="${AUTOSTART_DIR}/libretype.desktop"
 
 METHOD="auto"
 DRY_RUN=0
@@ -87,9 +87,9 @@ run() {
 
 usage() {
   cat <<'HELP'
-voxtype installer — one-command setup for voice-to-text dictation on Linux.
+libretype installer — one-command setup for voice-to-text dictation on Linux.
 
-  curl -fsSL https://github.com/atheerium/voxtype/releases/latest/download/install.sh | bash
+  curl -fsSL https://github.com/atheerium/libretype/releases/latest/download/install.sh | bash
 
 Options:
   -h, --help           Show this help
@@ -139,7 +139,7 @@ case "$arch" in
   *) target_arch="$arch" ;;
 esac
 
-# Display server: Wayland wins on XWayland, matching voxtype's own detection.
+# Display server: Wayland wins on XWayland, matching libretype's own detection.
 if [ -n "${WAYLAND_DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-}" = "wayland" ]; then
   display_server="wayland"
 elif [ -n "${DISPLAY:-}" ]; then
@@ -275,29 +275,29 @@ install_binary_release() {
     return 1
   fi
   for triple in "${target_arch}-unknown-linux-musl" "${target_arch}-unknown-linux-gnu"; do
-    asset="voxtype-${triple}.tar.gz"
+    asset="libretype-${triple}.tar.gz"
     url="${REPO_URL}/releases/download/${tag}/${asset}"
     info "Trying ${asset} ..."
-    if curl -fsSL -o /tmp/voxtype-install.tar.gz "$url" 2>/dev/null; then
+    if curl -fsSL -o /tmp/libretype-install.tar.gz "$url" 2>/dev/null; then
       # Verify checksum when available
-      local sum_file="/tmp/voxtype-install.sha256"
+      local sum_file="/tmp/libretype-install.sha256"
       if curl -fsSL -o "$sum_file" "${REPO_URL}/releases/download/${tag}/sha256sums.txt" 2>/dev/null \
          && command -v sha256sum >/dev/null 2>&1 \
          && grep -q "${asset}" "$sum_file"; then
         local want got
         want="$(grep "${asset}" "$sum_file" | awk '{print $1}')"
-        got="$(sha256sum /tmp/voxtype-install.tar.gz | awk '{print $1}')"
+        got="$(sha256sum /tmp/libretype-install.tar.gz | awk '{print $1}')"
         if [ "$want" != "$got" ]; then
           warn "Checksum mismatch for ${asset}; skipping this artifact."
           continue
         fi
       fi
       tmp="$(mktemp -d)"
-      if tar -xzf /tmp/voxtype-install.tar.gz -C "$tmp" && [ -f "$tmp/voxtype" ]; then
+      if tar -xzf /tmp/libretype-install.tar.gz -C "$tmp" && [ -f "$tmp/libretype" ]; then
         mkdir -p "$BIN_DIR"
-        run cp "$tmp/voxtype" "${BIN_DIR}/voxtype"
-        run chmod +x "${BIN_DIR}/voxtype"
-        rm -rf "$tmp" /tmp/voxtype-install.tar.gz /tmp/voxtype-install.sha256
+        run cp "$tmp/libretype" "${BIN_DIR}/libretype"
+        run chmod +x "${BIN_DIR}/libretype"
+        rm -rf "$tmp" /tmp/libretype-install.tar.gz /tmp/libretype-install.sha256
         return 0
       fi
       rm -rf "$tmp"
@@ -314,7 +314,7 @@ install_binary_source() {
     return 0
   fi
   if have_cmd cargo; then
-    say "Building voxtype from source with cargo (this takes a few minutes)..."
+    say "Building libretype from source with cargo (this takes a few minutes)..."
     if ! run cargo install --git "${REPO_URL}" --branch "$BRANCH" --root "$PREFIX" --locked; then
       # rustup shims exist but no default toolchain is configured; set one
       # and retry once. This is safe and exactly what a Rust user wants.
@@ -355,7 +355,7 @@ write_config() {
   fi
   mkdir -p "$CONFIG_DIR"
   {
-    echo "# voxtype configuration"
+    echo "# libretype configuration"
     if [ -n "$API_KEY" ]; then
       echo "groq_api_key = \"${API_KEY}\""
     else
@@ -367,7 +367,7 @@ write_config() {
     echo "language = \"en\"            # ISO-639-1 code, optional"
   } > "$CONFIG_FILE"
   if [ -z "$API_KEY" ]; then
-    warn "No GROQ_API_KEY found. voxtype will use the env var at runtime, or"
+    warn "No GROQ_API_KEY found. libretype will use the env var at runtime, or"
     warn "edit ${CONFIG_FILE} and add groq_api_key = \"gsk_...\" (console.groq.com)."
   fi
 }
@@ -385,9 +385,9 @@ setup_autostart() {
   {
     echo "[Desktop Entry]"
     echo "Type=Application"
-    echo "Name=voxtype"
+    echo "Name=libretype"
     echo "Comment=Voice-to-text dictation daemon"
-    echo "Exec=${BIN_DIR}/voxtype --daemon"
+    echo "Exec=${BIN_DIR}/libretype --daemon"
     echo "X-GNOME-Autostart-enabled=true"
   } > "$AUTOSTART_FILE"
   info "Autostart entry written to ${AUTOSTART_FILE}"
@@ -411,7 +411,7 @@ append_line_if_missing() { # $1 = file, $2 = line
 }
 
 setup_hotkey() {
-  local bin="$BIN_DIR/voxtype"
+  local bin="$BIN_DIR/libretype"
   case "$compositor" in
     sway)
       local cfg="$HOME/.config/sway/config"
@@ -431,7 +431,7 @@ setup_hotkey() {
     gnome)
       warn "GNOME: no universal hotkey is possible without an extension."
       warn "Add a custom shortcut in Settings -> Keyboard -> Keyboard Shortcuts:"
-      info "  Name: voxtype   Command: ${bin}"
+      info "  Name: libretype   Command: ${bin}"
       ;;
     xfce)
       say "Binding Ctrl+Space in XFCE via xfconf-query"
@@ -455,14 +455,14 @@ setup_hotkey() {
 # ---------------------------------------------------------------------------
 
 main() {
-  say "voxtype installer"
+  say "libretype installer"
   echo
   info "System: ${os} ${arch} | Display: ${display_server} | Desktop: ${desktop:-none} (${compositor})"
   info "Install prefix: ${BIN_DIR}"
   [ "$DRY_RUN" -eq 1 ] && warn "DRY RUN: nothing below will actually be executed."
   echo
 
-  [ "$os" = "Linux" ] || warn "voxtype is designed for Linux; continuing anyway."
+  [ "$os" = "Linux" ] || warn "libretype is designed for Linux; continuing anyway."
 
   # 1. Dependencies
   if [ -n "$pkg_mgr" ]; then
@@ -476,7 +476,7 @@ main() {
     done < <(deps_for_env)
     if [ "${#deps[@]}" -gt 0 ]; then
       say "Installing dependencies via ${pkg_mgr}: ${deps[*]}"
-      pkg_install "${deps[@]}" || warn "Dependency installation failed; voxtype will report missing tools at runtime."
+      pkg_install "${deps[@]}" || warn "Dependency installation failed; libretype will report missing tools at runtime."
     else
       say "All runtime dependencies already present."
     fi
@@ -485,10 +485,10 @@ main() {
   fi
 
   # 2. Binary
-  if [ -x "${BIN_DIR}/voxtype" ] && [ "$METHOD" = "auto" ]; then
-    say "voxtype already installed at ${BIN_DIR}/voxtype."
+  if [ -x "${BIN_DIR}/libretype" ] && [ "$METHOD" = "auto" ]; then
+    say "libretype already installed at ${BIN_DIR}/libretype."
   else
-    say "Installing voxtype..."
+    say "Installing libretype..."
     local ok=1
     if [ "$METHOD" != "source" ]; then
       install_binary_release || ok=0
@@ -499,9 +499,9 @@ main() {
       install_binary_source
     fi
     if [ "$DRY_RUN" -eq 1 ]; then
-      info "Would install voxtype to ${BIN_DIR}/voxtype"
+      info "Would install libretype to ${BIN_DIR}/libretype"
     else
-      say "Installed to ${BIN_DIR}/voxtype"
+      say "Installed to ${BIN_DIR}/libretype"
     fi
   fi
 
@@ -523,17 +523,17 @@ main() {
 
   # 6. Start daemon
   if [ "$DO_START" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
-    say "Starting voxtype daemon"
-    nohup "${BIN_DIR}/voxtype" --daemon >/dev/null 2>&1 || warn "Could not start daemon (missing display server?)."
+    say "Starting libretype daemon"
+    nohup "${BIN_DIR}/libretype" --daemon >/dev/null 2>&1 || warn "Could not start daemon (missing display server?)."
   fi
 
   echo
-  say "Done! voxtype is installed."
+  say "Done! libretype is installed."
   echo
   info "  Press  Ctrl+Space  to start recording, speak, press Ctrl+Space again."
   info "  Transcribed text is pasted into your focused app automatically."
   info "  Text is always on the clipboard too (manual paste: Ctrl+V / Ctrl+Shift+V)."
-  info "  Logs: ${XDG_DATA_HOME:-$HOME/.local/share}/voxtype/daemon.log"
+  info "  Logs: ${XDG_DATA_HOME:-$HOME/.local/share}/libretype/daemon.log"
   echo
   if [ "$DRY_RUN" -eq 0 ] && [ -n "$API_KEY" ]; then
     info "Groq API key detected. You're all set."
